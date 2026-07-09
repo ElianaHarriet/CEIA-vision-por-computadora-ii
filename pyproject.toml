@@ -1,0 +1,22 @@
+[project]
+name = "car-damage-detection"
+version = "0.1.0"
+description = "Sistema de Detección y Evaluación de Daños en Vehículos"
+requires-python = ">=3.11"
+
+dependencies = [
+    "ultralytics",
+    "torch",
+    "torchvision",
+    "transformers",
+    "opencv-python",
+    "matplotlib",
+    "seaborn",
+    "pandas",
+    "numpy",
+    "scikit-learn",
+    "roboflow",
+    "jupyter",
+    "ipykernel",
+    "pillow",
+]
