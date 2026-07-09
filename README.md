@@ -4,6 +4,14 @@
 
 Repositorio para el curso de Visión por Computadora II de la Carrera de Especialización en Inteligencia Artificial (CEIA) - FIUBA.
 
+## Integrantes
+
+| Nombre | Email |
+|---|---|
+| Santiago Bartolini Rizzo | santiagobartolini@gmail.com |
+| Luis Ali | aliluis@gmail.com |
+| Eliana Harriet | eharriet@fi.uba.ar |
+
 ## Submódulo
 
 ```
