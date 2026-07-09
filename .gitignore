@@ -1,0 +1,35 @@
+# Root dot-directories (local config, tooling, etc.)
+/.*/
+
+# macOS
+.DS_Store
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# Virtual environments
+.venv/
+.uv/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Logs
+*.log
+
+# Datasets
+data/
+*.zip
+*.tar.gz
+*.rar
+
+# Model weights
+*.pth
+*.pt
+*.h5
+*.pkl
+*.onnx
+*.weights
+*.engine
