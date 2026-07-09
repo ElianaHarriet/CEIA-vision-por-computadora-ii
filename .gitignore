@@ -1,6 +1,9 @@
 # Root dot-directories (local config, tooling, etc.)
 /.*/
 
+# Environment
+.env
+
 # macOS
 .DS_Store
 
