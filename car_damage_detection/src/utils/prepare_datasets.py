@@ -25,11 +25,12 @@ def polygons_to_mask(polygons, w, h):
             draw.polygon(poly, fill=255)
     return mask
 
-for split in ["train", "valid", "test"]:
+
+def prepare_split(split):
     src_split = SRC / split
     json_path = src_split / "_annotations.coco.json"
     if not json_path.exists():
-        continue
+        return
 
     with open(json_path) as f:
         data = json.load(f)
@@ -96,16 +97,31 @@ for split in ["train", "valid", "test"]:
             draw.polygon(coords, fill=cls_id)
         sem_mask.save(sem_masks_dir / f"{stem}.png")
 
-inst_yaml = f"""train: {OUT}/instance/train/images
+
+def write_data_yaml():
+    inst_yaml = f"""train: {OUT}/instance/train/images
 val: {OUT}/instance/valid/images
 test: {OUT}/instance/test/images
 nc: {len(CLASS_NAMES)}
 names: {CLASS_NAMES}
 """
-(OUT / "instance" / "data.yaml").write_text(inst_yaml)
+    (OUT / "instance" / "data.yaml").write_text(inst_yaml)
 
-print("Done. Prepared datasets:")
-for split in ["train", "valid", "test"]:
-    inst = len(list((OUT / "instance" / split / "images").glob("*")))
-    sem = len(list((OUT / "semantic" / split / "images").glob("*")))
-    print(f"  {split}: instance={inst} images, semantic={sem} images")
+
+def print_summary():
+    print("Done. Prepared datasets:")
+    for split in ["train", "valid", "test"]:
+        inst = len(list((OUT / "instance" / split / "images").glob("*")))
+        sem = len(list((OUT / "semantic" / split / "images").glob("*")))
+        print(f"  {split}: instance={inst} images, semantic={sem} images")
+
+
+def main():
+    for split in ["train", "valid", "test"]:
+        prepare_split(split)
+    write_data_yaml()
+    print_summary()
+
+
+if __name__ == "__main__":
+    main()
