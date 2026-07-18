@@ -4,6 +4,13 @@
 
 Repositorio para el curso de Visión por Computadora II de la Carrera de Especialización en Inteligencia Artificial (CEIA) - FIUBA.
 
+## Dependencias
+
+```bash
+pip install poetry
+poetry install
+```
+
 ## Integrantes
 
 | Nombre | Email |
