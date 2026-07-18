@@ -4,6 +4,27 @@
 
 Repositorio para el curso de Visión por Computadora II de la Carrera de Especialización en Inteligencia Artificial (CEIA) - FIUBA.
 
+## Dataset
+
+Car Damages forkeado en Roboflow. 4 clases:
+
+| ID | Clase |
+|----|-------|
+| 0 | Minor Damage (Dent) |
+| 1 | Minor Damage (Scratch) |
+| 2 | No Damage |
+| 3 | Severe Damage |
+
+Descargar y preparar:
+```bash
+cp .env.template .env   # completar ROBOFLOW_API_KEY
+poetry run python car_damage_detection/src/utils/download_dataset.py
+```
+
+Genera dos formatos en `car_damage_detection/data/car-damages-ready/`:
+- `instance/` — etiquetas YOLOv8 .txt para segmentación de instancias
+- `semantic/` — máscaras PNG para segmentación semántica
+
 ## Dependencias
 
 ```bash
