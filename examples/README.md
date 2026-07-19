@@ -7,7 +7,7 @@ Esta carpeta contiene notebooks de ejemplo para aprender a usar la infraestructu
 Notebook introductorio que demuestra cómo:
 
 - **Configurar las credenciales** de MinIO (S3) para que MLflow pueda guardar artefactos
-- **Conectarse a MLflow** corriendo en `http://localhost:5001`
+- **Conectarse a MLflow** ejecutándose en `http://localhost:5001`
 - **Crear un experimento** y configurar el tracking
 - **Entrenar un modelo simple** (RandomForestRegressor con el dataset de diabetes)
 - **Usar autolog** para registrar automáticamente métricas, parámetros y modelos
@@ -16,7 +16,7 @@ Notebook introductorio que demuestra cómo:
 
 Antes de ejecutar este notebook, asegurarse de:
 
-1. Tener todos los servicios corriendo con `docker compose --profile all up`
+1. Tener todos los servicios ejecutándose con `docker compose --profile all up`
 2. Verificar que MLflow esté accesible en http://localhost:5001
 3. Verificar que MinIO esté accesible en http://localhost:9001
 
@@ -57,18 +57,18 @@ El notebook configura automáticamente las credenciales de acceso a MinIO y la U
    - Si usaste la opción 2, navegar a `mlflow_quickstart.ipynb` en el navegador
    - Ejecutar las celdas en orden
 
-5. **Detener Jupyter y desactivar el entorno (cuando termines):**
+5. **Detener Jupyter y desactivar el entorno (cuando se termine):**
    ```bash
-   # Presionar Ctrl+C en la terminal donde corre Jupyter para detener el servidor
+   # Presionar Ctrl+C en la terminal donde se ejecuta Jupyter para detener el servidor
    # Luego desactivar el entorno virtual
    deactivate
    ```
 
-**Nota:** El entorno virtual se crea en la raíz del proyecto para que pueda ser reutilizado si agregás más notebooks o scripts en el futuro.
+**Nota:** El entorno virtual se crea en la raíz del proyecto para que pueda ser reutilizado si se agregan más notebooks o scripts en el futuro.
 
 ### Uso
 
-**Nota:** Si preferís, también podés abrir y ejecutar el notebook directamente en VS Code con la extensión de Jupyter.
+**Nota:** También se puede abrir y ejecutar el notebook directamente en VS Code con la extensión de Jupyter.
 
 1. Abrir el notebook con Jupyter o VS Code
 2. Ejecutar las celdas en orden

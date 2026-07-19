@@ -37,14 +37,111 @@ y las siguientes bases de datos:
 
 ## 📦 Submódulo
 
+El proyecto incluye el siguiente submódulo:
+
 ```
 vision_computadora_II/  (rama: VpC2_2026)
 └─ https://github.com/FIUBA-Posgrado-Inteligencia-Artificial/vision_computadora_II
 ```
 
+Para inicializarlo, ejecutar:
+
 ```bash
 git submodule update --init --recursive
 ```
+
+## 📊 Dataset
+
+### Descripción
+
+El proyecto utiliza el dataset **Car Damages** que contiene imágenes de vehículos con diferentes tipos de daños para tareas de instance y semantic segmentation.
+
+**Clases del dataset:**
+
+| ID | Clase | Descripción |
+|----|-------|-------------|
+| 0 | Minor Damage (Dent) | Abolladuras leves |
+| 1 | Minor Damage (Scratch) | Rayones superficiales |
+| 2 | No Damage | Sin daños visibles |
+| 3 | Severe Damage | Daños severos/graves |
+
+
+### 🔄 Configuración de Roboflow (Prerrequisito)
+
+⚠️ **IMPORTANTE:** Completar esta configuración ANTES de la instalación. Los valores obtenidos aquí serán necesarios para el archivo `.env`.
+
+Es necesario configurar una cuenta propia de Roboflow y forkear el dataset. Seguir estos pasos:
+
+#### 1️⃣ Crear cuenta en Roboflow (si no tienes una)
+
+- Ir a https://roboflow.com y registrarse
+- Se creará automáticamente un workspace personal
+
+#### 2️⃣ Obtener la API Key
+
+- Ir a **Settings → API** o directamente a https://app.roboflow.com/settings/api
+- Copiar la **Private API Key**
+- ⚠️ **No compartir esta key con nadie** - es personal y privada
+- Guardar este valor para el paso de instalación
+
+#### 3️⃣ Forkear el dataset público
+
+- Ir al dataset original: https://universe.roboflow.com/project-p5nyc/car-damages-v3gyz
+- Hacer clic en el botón **"Fork Dataset"** (arriba a la derecha)
+- Esto crea una copia del dataset en tu workspace personal
+- El dataset forkeado aparecerá en tu dashboard
+
+#### 4️⃣ Generar la versión 1 del dataset
+
+Después de forkear, el dataset no tiene versiones generadas. Es necesario crear la versión 1:
+
+1. En el workspace personal, abrir el proyecto recién forkeado (ej: `car-damages-v3gyz-XXXXX`)
+2. Ir a la pestaña **"Generate"** o **"Versions"**
+3. Hacer clic en **"Create New Version"**
+4. Configurar preprocessing (opcional - usar valores por defecto):
+   - Auto-Orient: ✅
+   - Resize: 640x640 (recomendado para YOLO)
+5. Configurar augmentations (opcional - se puede omitir o agregar según necesidad)
+6. Hacer clic en **"Generate"**
+7. Esperar a que se genere la versión (puede tardar unos minutos)
+8. Una vez generada, aparecerá **"Version 1"** en la lista de versiones
+
+#### 5️⃣ Obtener los identificadores del proyecto
+
+Una vez generada la versión, se necesitan 3 valores para configurar el `.env`:
+
+**a) ROBOFLOW_WORKSPACE:**
+- Es el nombre de usuario de Roboflow
+- Se encuentra en la URL cuando se está en el dashboard
+- Ejemplo: `https://app.roboflow.com/TU_WORKSPACE/...`
+- También está visible en la esquina superior izquierda de Roboflow
+
+**b) ROBOFLOW_PROJECT:**
+- Es el ID único del proyecto forkeado
+- Se encuentra en la URL cuando se abre el proyecto:
+  ```
+  https://app.roboflow.com/tu_workspace/car-damages-v3gyz-XXXXX/...
+                                         ^^^^^^^^^^^^^^^^^^^^^^
+                                         Este es el PROJECT_ID
+  ```
+- El sufijo `-XXXXX` es único para cada fork
+
+**c) ROBOFLOW_VERSION:**
+- Es el número de versión generada (normalmente `1`)
+- Se puede ver en la pestaña "Versions" del proyecto
+
+#### 🎯 Ejemplo de valores obtenidos
+
+Si el workspace es `juan-perez-abc` y el proyecto forkeado es `car-damages-v3gyz-9z8x7`:
+
+```bash
+ROBOFLOW_API_KEY=AbCdEf123456GhIjKl789012
+ROBOFLOW_WORKSPACE=juan-perez-abc
+ROBOFLOW_PROJECT=car-damages-v3gyz-9z8x7
+ROBOFLOW_VERSION=1
+```
+
+⚠️ **Guardar estos 4 valores** - serán necesarios en el paso 3 de la instalación.
 
 ## 🚀 Instalación
 
@@ -55,33 +152,15 @@ git submodule update --init --recursive
 3. **Configurar el archivo `.env`:**
    - Solicitar el archivo `.env` al administrador del proyecto (se comparte por canal seguro)
    - Ubicar el archivo `.env` en la raíz del proyecto
-   - **Cada miembro del equipo debe configurar sus propias credenciales de Roboflow:**
-     
-     a. Obtener tu API key personal:
-        - Ir a https://app.roboflow.com/settings/api
-        - Copiar tu API key
-     
-     b. Crear tu workspace (si no tenés uno):
-        - El workspace es tu usuario de Roboflow
-        - Si es tu primera vez, se crea automáticamente al registrarte
-     
-     c. Forkear el dataset original:
-        - Ir a https://universe.roboflow.com/project-p5nyc/car-damages-v3gyz
-        - Hacer clic en "Fork Dataset" para crear una copia en tu workspace
-        - Una vez forkeado, generar la versión 1 aplicando preprocessing y augmentations
-     
-     d. Editar el archivo `.env` con tus valores:
-        ```bash
-        ROBOFLOW_API_KEY=tu_api_key_personal_aqui
-        ROBOFLOW_WORKSPACE=tu_username_de_roboflow
-        ROBOFLOW_PROJECT=car-damages-v3gyz-XXXXX  # ID del proyecto forkeado (ver en la URL)
-        ROBOFLOW_VERSION=1
-        ```
+   - Editar el archivo y completar las variables de Roboflow con los valores obtenidos en la sección [Configuración de Roboflow](#-configuración-de-roboflow-prerequisito):
+     ```bash
+     ROBOFLOW_API_KEY=tu_api_key_personal_aqui
+     ROBOFLOW_WORKSPACE=tu_username_de_roboflow
+     ROBOFLOW_PROJECT=car-damages-v3gyz-XXXXX
+     ROBOFLOW_VERSION=1
+     ```
    
-   - El `ROBOFLOW_PROJECT` se encuentra en la URL cuando abrís tu proyecto forkeado:
-     `https://app.roboflow.com/tu_workspace/car-damages-v3gyz-XXXXX/...`
-   
-   ⚠️ **Nota importante:** Cada miembro usa su propio workspace y fork del dataset. No compartir API keys.
+   ⚠️ **Recordatorio:** Cada miembro usa su propio workspace y fork del dataset. No compartir API keys.
    
 4. Crear las carpetas necesarias:
    ```bash
@@ -101,7 +180,7 @@ git submodule update --init --recursive
    mkdir car_damage_detection
    ```
 
-5. En Linux o MacOS, en el archivo `.env`, reemplazar `AIRFLOW_UID` por el del usuario a utilizar (para encontrar el UID, utilizar el comando `id -u <username>`). De lo contrario, Airflow dejará sus carpetas internas como root y no se podrá subir DAGs (en `airflow/dags`) o plugins, etc.
+5. En Linux o MacOS, en el archivo `.env`, reemplazar `AIRFLOW_UID` por el del usuario a utilizar (para encontrar el UID, utilizar el comando `id -u <username>`). De lo contrario, Airflow dejará sus carpetas internas como root y no será posible subir DAGs (en `airflow/dags`) o plugins, etc.
 
 6. En la carpeta raíz de este repositorio, ejecutar:
 
@@ -109,7 +188,7 @@ git submodule update --init --recursive
 docker compose --profile all up
 ```
 
-7. (Opcional, recomendado): Verificar que todos los servicios estén funcionando con el comando `docker ps -a` o revisar en Docker Desktop.
+7. (Opcional, recomendado) Verificar que todos los servicios estén funcionando con el comando `docker ps -a` o revisar en Docker Desktop.
 
 8. Acceder a los diferentes servicios mediante:
    - Apache Airflow: http://localhost:8080
@@ -125,8 +204,7 @@ Todos los puertos y otras configuraciones se pueden modificar en el archivo `.en
 Una vez levantados los servicios, el primer paso es descargar y preparar el dataset:
 
 1. **Acceder a Airflow**: http://localhost:8080
-   - Usuario: `airflow`
-   - Contraseña: `airflow`
+   Solicitar usuario y contraseña al administrador
 
 2. **Ejecutar el DAG `data_preparation`**:
    - Buscar el DAG `data_preparation` en la lista
@@ -164,9 +242,9 @@ Para verificar que la infraestructura funciona correctamente, se puede ejecutar 
 
 Ver [examples/README.md](examples/README.md) para más detalles sobre cómo usar los ejemplos.
 
-## 🛑 Apagar los servicios
+## 🛑 Detener los servicios
 
-Estos servicios ocupan cierta cantidad de memoria RAM y procesamiento, por lo que cuando no se están utilizando, se recomienda detenerlos. Para hacerlo, ejecutar:
+Estos servicios ocupan cierta cantidad de memoria RAM y procesamiento, por lo que cuando no se utilizan, se recomienda detenerlos. Para hacerlo, ejecutar:
 
 ```bash
 docker compose --profile all down
@@ -178,20 +256,7 @@ Si se desea no solo detenerlos, sino también eliminar toda la infraestructura (
 docker compose down --rmi all --volumes
 ```
 
-Nota: Al hacer esto, se perderá todo en los buckets y bases de datos.
-
-## 📊 Dataset
-
-Car Damages forkeado en Roboflow. 4 clases:
-
-| ID | Clase |
-|----|-------|
-| 0 | Minor Damage (Dent) |
-| 1 | Minor Damage (Scratch) |
-| 2 | No Damage |
-| 3 | Severe Damage |
-
-
+⚠️ **Nota:** Al ejecutar este comando, se perderá todo el contenido de los buckets y bases de datos.
 
 ## 📄 Licencia
 
