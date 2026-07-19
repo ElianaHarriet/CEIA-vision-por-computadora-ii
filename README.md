@@ -164,21 +164,18 @@ ROBOFLOW_VERSION=1
    
 4. Crear las carpetas necesarias:
    ```bash
-   # Carpetas de Airflow
-   mkdir -p airflow/config airflow/dags airflow/logs airflow/plugins
-   
-   # Carpeta para datos (necesaria para el volumen de Docker)
-   mkdir -p car_damage_detection
+   # Carpetas de Airflow (dags ya existe en el repositorio)
+   mkdir -p airflow/config airflow/logs airflow/plugins
    ```
    
    Nota: En Windows usar `mkdir` sin `-p`:
    ```cmd
    mkdir airflow\config
-   mkdir airflow\dags
    mkdir airflow\logs
    mkdir airflow\plugins
-   mkdir car_damage_detection
    ```
+   
+   ℹ️ **Sobre `car_damage_detection/`:** Esta carpeta ya existe en el repositorio (con `.gitkeep`). Docker la montará como volumen y el DAG `data_preparation` creará automáticamente la subcarpeta `data/` cuando se ejecute por primera vez.
 
 5. En Linux o MacOS, en el archivo `.env`, reemplazar `AIRFLOW_UID` por el del usuario a utilizar (para encontrar el UID, utilizar el comando `id -u <username>`). De lo contrario, Airflow dejará sus carpetas internas como root y no será posible subir DAGs (en `airflow/dags`) o plugins, etc.
 
@@ -231,8 +228,6 @@ Una vez levantados los servicios, el primer paso es descargar y preparar el data
 - ✅ Genera máscaras PNG para semantic segmentation
 - ✅ Valida la integridad de los datos
 - ✅ Crea toda la estructura de carpetas necesaria
-
-⚠️ **Importante:** No es necesario crear manualmente ninguna carpeta. El DAG se encarga de todo.
 
 ## 🧪 Ejemplos
 
