@@ -1,0 +1,2 @@
+# Este archivo mantiene la carpeta car_damage_detection en el repositorio
+# Los datos descargados por el DAG de Airflow se guardarán aquí
