@@ -174,9 +174,9 @@ airflow/secrets/
 # Datasets descargados
 car_damage_detection/
 
-# MLflow local artifacts
+# MLflow local artifacts (solo ignorar la carpeta raiz de artefactos, no dockerfiles/mlflow)
 mlruns/
-mlflow/
+/mlflow/
 
 # Docker volumes/data persistente
 db_data/
