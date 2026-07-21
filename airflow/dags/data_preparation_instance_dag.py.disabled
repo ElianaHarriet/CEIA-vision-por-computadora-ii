@@ -1,0 +1,212 @@
+"""
+DAG para preparación de datos de SEGMENTACIÓN POR INSTANCIAS - Dataset B (Car Damage Detection).
+
+Este DAG descarga el dataset de Roboflow con anotaciones nativas de instance segmentation
+y lo prepara en formato YOLOv8.
+
+Dataset: Car Damage Detection - Instance Segmentation
+Clases: car-damage (1 clase)
+
+Refactorizado siguiendo principios SOLID y Clean Code.
+"""
+
+from datetime import datetime, timedelta
+from airflow import DAG
+from airflow.operators.python import PythonOperator
+
+import sys
+from pathlib import Path
+
+# Add dags directory to Python path
+dags_path = Path(__file__).parent
+if str(dags_path) not in sys.path:
+    sys.path.insert(0, str(dags_path))
+
+from core.config import RoboflowConfig, DatasetPaths
+from core.roboflow_client import RoboflowClient
+from core.file_operations import FileSystemOperations
+from core.logger import DatasetLogger
+from core.validators import DatasetValidator
+from instance.dataset_organizer import InstanceDatasetOrganizer
+
+
+# Configuration
+SPLITS = ["train", "valid", "test"]
+
+# DAG configuration
+default_args = {
+    'owner': 'airflow',
+    'depends_on_past': False,
+    'email_on_failure': False,
+    'email_on_retry': False,
+    'retries': 1,
+    'retry_delay': timedelta(minutes=5),
+}
+
+dag = DAG(
+    'data_preparation_instance',
+    default_args=default_args,
+    description='Descarga y prepara el dataset de instance segmentation (Car Damage Detection) desde Roboflow',
+    schedule=None,
+    start_date=datetime(2024, 1, 1),
+    catchup=False,
+    tags=['data', 'preprocessing', 'instance_segmentation', 'dataset_b'],
+)
+
+
+def check_roboflow_api_key(**context):
+    """Verify Roboflow API key is configured."""
+    try:
+        config = RoboflowConfig.from_env('ROBOFLOW_PROJECT_INSTANCE', 'ROBOFLOW_VERSION_INSTANCE')
+        print("✓ ROBOFLOW_API_KEY configurada correctamente")
+        return config.api_key
+    except ValueError as e:
+        print(f"❌ Error de configuración: {e}")
+        raise
+
+
+def download_dataset_task(**context):
+    """Download dataset from Roboflow."""
+    config = RoboflowConfig.from_env('ROBOFLOW_PROJECT_INSTANCE', 'ROBOFLOW_VERSION_INSTANCE')
+    paths = DatasetPaths.create(
+        "/opt/airflow/car_damage_detection/car-damage-detection",
+        "car-damage-detection-forked",
+        "car-damage-detection-ready"
+    )
+    
+    fs = FileSystemOperations()
+    _clean_existing_data(fs, paths)
+    _download_from_roboflow(config, paths, fs)
+    _log_download_stats(paths, fs)
+    return str(paths.raw)
+
+
+def _clean_existing_data(fs: FileSystemOperations, paths: DatasetPaths) -> None:
+    """Clean existing dataset files."""
+    fs.remove_directory(paths.raw)
+    fs.remove_directory(paths.ready)
+    print("✓ Datos anteriores eliminados")
+
+
+def _download_from_roboflow(config: RoboflowConfig, paths: DatasetPaths, fs: FileSystemOperations) -> None:
+    """Download dataset using Roboflow client."""
+    fs.ensure_directory(paths.base)
+    DatasetLogger.log_download_start(config.workspace, config.project, config.version)
+    
+    client = RoboflowClient(config)
+    client.download_dataset("yolov8", paths.raw)
+    DatasetLogger.log_download_complete(str(paths.raw))
+
+
+def _log_download_stats(paths: DatasetPaths, fs: FileSystemOperations) -> None:
+    """Log download statistics."""
+    for split in SPLITS:
+        images_dir = paths.raw / split / "images"
+        count = len(fs.list_images(images_dir))
+        DatasetLogger.log_split_stats(split, count)
+
+
+def organize_dataset_task(**context):
+    """Organize downloaded dataset."""
+    paths = DatasetPaths.create(
+        "/opt/airflow/car_damage_detection/car-damage-detection",
+        "car-damage-detection-forked",
+        "car-damage-detection-ready"
+    )
+    
+    organizer = InstanceDatasetOrganizer(paths.raw, paths.ready)
+    stats = organizer.organize_all_splits(SPLITS)
+    _copy_data_yaml(organizer)
+    
+    print(f"\n✓ Organización completada")
+    print(f"📁 Datos disponibles en: {paths.ready}")
+    DatasetLogger.log_stats(stats)
+    return stats
+
+
+def _copy_data_yaml(organizer: InstanceDatasetOrganizer) -> None:
+    """Copy data.yaml file."""
+    if organizer.copy_data_yaml():
+        print("✓ data.yaml copiado")
+    else:
+        print("⚠️  data.yaml no encontrado")
+
+
+def validate_prepared_data(**context):
+    """Validate prepared dataset integrity."""
+    paths = DatasetPaths.create(
+        "/opt/airflow/car_damage_detection/car-damage-detection",
+        "car-damage-detection-forked",
+        "car-damage-detection-ready"
+    )
+    
+    validator = DatasetValidator(paths.ready)
+    _validate_structure(validator)
+    stats = _collect_validation_stats(paths)
+    _check_data_yaml(paths)
+    
+    DatasetLogger.log_validation_success()
+    DatasetLogger.log_stats(stats)
+    context['ti'].xcom_push(key='dataset_stats', value=stats)
+    return stats
+
+
+def _validate_structure(validator: DatasetValidator) -> None:
+    """Validate directory structure."""
+    required_dirs = [
+        "train/images", "train/labels",
+        "valid/images", "valid/labels",
+        "test/images", "test/labels",
+    ]
+    validator.validate_directories(required_dirs)
+
+
+def _collect_validation_stats(paths: DatasetPaths) -> dict:
+    """Collect validation statistics."""
+    fs = FileSystemOperations()
+    stats = {}
+    
+    for split in SPLITS:
+        images_count = fs.count_files(paths.ready / split / "images")
+        labels_count = fs.count_files(paths.ready / split / "labels", "*.txt")
+        stats[split] = {'images': images_count, 'labels': labels_count}
+    
+    return stats
+
+
+def _check_data_yaml(paths: DatasetPaths) -> None:
+    """Check if data.yaml exists."""
+    data_yaml = paths.ready / "data.yaml"
+    if data_yaml.exists():
+        print(f"✓ data.yaml encontrado")
+    else:
+        print("⚠️  Advertencia: data.yaml no encontrado")
+
+
+# Define tasks
+check_api_key = PythonOperator(
+    task_id='check_roboflow_api_key',
+    python_callable=check_roboflow_api_key,
+    dag=dag,
+)
+
+download_dataset = PythonOperator(
+    task_id='download_dataset',
+    python_callable=download_dataset_task,
+    dag=dag,
+)
+
+organize_dataset = PythonOperator(
+    task_id='organize_dataset',
+    python_callable=organize_dataset_task,
+    dag=dag,
+)
+
+validate_data = PythonOperator(
+    task_id='validate_prepared_data',
+    python_callable=validate_prepared_data,
+    dag=dag,
+)
+
+# Define dependencies
+check_api_key >> download_dataset >> organize_dataset >> validate_data

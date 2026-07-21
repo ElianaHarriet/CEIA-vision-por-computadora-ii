@@ -172,7 +172,7 @@ airflow/plugins/
 airflow/secrets/
 
 # Datasets descargados
-car_damage_detection/data/
+car_damage_detection/
 
 # MLflow local artifacts
 mlruns/

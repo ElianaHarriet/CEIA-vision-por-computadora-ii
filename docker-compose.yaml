@@ -56,6 +56,12 @@ x-airflow-common: &airflow-common
     ROBOFLOW_WORKSPACE: ${ROBOFLOW_WORKSPACE}
     ROBOFLOW_PROJECT: ${ROBOFLOW_PROJECT}
     ROBOFLOW_VERSION: ${ROBOFLOW_VERSION:-1}
+    MLFLOW_EXPERIMENT_NAME: ${MLFLOW_EXPERIMENT_NAME:-car-damage-segmentation}
+    MODEL_NAME_INSTANCE: ${MODEL_NAME_INSTANCE:-car-damage-instance-segmentation}
+    MODEL_NAME_SEMANTIC: ${MODEL_NAME_SEMANTIC:-car-damage-semantic-segmentation}
+    MODEL_STAGE: ${MODEL_STAGE:-Production}
+    MODEL_VERSION_INSTANCE: ${MODEL_VERSION_INSTANCE:-latest}
+    MODEL_VERSION_SEMANTIC: ${MODEL_VERSION_SEMANTIC:-latest}
   volumes:
     - ${AIRFLOW_PROJ_DIR:-./airflow}/dags:/opt/airflow/dags
     - ${AIRFLOW_PROJ_DIR:-./airflow}/logs:/opt/airflow/logs
@@ -217,6 +223,13 @@ services:
       - AWS_SECRET_ACCESS_KEY=${MINIO_SECRET_ACCESS_KEY:-minio123}
       - MLFLOW_S3_ENDPOINT_URL=http://s3:9000
       - AWS_ENDPOINT_URL_S3=http://s3:9000
+      - MLFLOW_TRACKING_URI=http://mlflow:5000
+      - MLFLOW_EXPERIMENT_NAME=${MLFLOW_EXPERIMENT_NAME:-car-damage-segmentation}
+      - MODEL_NAME_INSTANCE=${MODEL_NAME_INSTANCE:-car-damage-instance-segmentation}
+      - MODEL_NAME_SEMANTIC=${MODEL_NAME_SEMANTIC:-car-damage-semantic-segmentation}
+      - MODEL_STAGE=${MODEL_STAGE:-Production}
+      - MODEL_VERSION_INSTANCE=${MODEL_VERSION_INSTANCE:-latest}
+      - MODEL_VERSION_SEMANTIC=${MODEL_VERSION_SEMANTIC:-latest}
     command: >
       uvicorn app:app 
       --host 0.0.0.0

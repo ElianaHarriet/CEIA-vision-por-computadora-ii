@@ -52,9 +52,13 @@ git submodule update --init --recursive
 
 ## 📊 Dataset
 
-### Descripción
+El proyecto compara dos arquitecturas de segmentación (instance vs semantic) usando el **mismo dataset** en diferentes formatos.
 
-El proyecto utiliza el dataset **Car Damages** que contiene imágenes de vehículos con diferentes tipos de daños para tareas de instance y semantic segmentation.
+### Dataset: Car Damages (Segmentación Semántica)
+
+Dataset original en formato de segmentación semántica, que se convierte automáticamente a ambos formatos necesarios.
+
+**Fuente:** https://universe.roboflow.com/project-p5nyc/car-damages-v3gyz
 
 **Clases del dataset:**
 
@@ -64,6 +68,18 @@ El proyecto utiliza el dataset **Car Damages** que contiene imágenes de vehícu
 | 1 | Minor Damage (Scratch) | Rayones superficiales |
 | 2 | No Damage | Sin daños visibles |
 | 3 | Severe Damage | Daños severos/graves |
+
+**Estadísticas:**
+- Total: 2,324 imágenes
+- Train: 1,974 imágenes
+- Valid: 231 imágenes
+- Test: 119 imágenes
+
+**Formatos generados:**
+- `instance/` → Para entrenar modelos de instance segmentation (YOLOv8-seg)
+- `semantic/` → Para entrenar modelos de semantic segmentation (U-Net, DeepLab)
+
+> 📖 **Ver [METODOLOGIA.md](METODOLOGIA.md)** para entender la metodología completa del proyecto y por qué se usa un solo dataset.
 
 
 ### 🔄 Configuración de Roboflow (Prerrequisito)
@@ -84,19 +100,21 @@ Es necesario configurar una cuenta propia de Roboflow y forkear el dataset. Segu
 - ⚠️ **No compartir esta key con nadie** - es personal y privada
 - Guardar este valor para el paso de instalación
 
-#### 3️⃣ Forkear el dataset público
+#### 3️⃣ Forkear el Dataset (Car Damages)
 
 - Ir al dataset original: https://universe.roboflow.com/project-p5nyc/car-damages-v3gyz
 - Hacer clic en el botón **"Fork Dataset"** (arriba a la derecha)
-- Esto crea una copia del dataset en tu workspace personal
-- El dataset forkeado aparecerá en tu dashboard
+- Esto crea una copia del dataset en el workspace personal
+- El dataset forkeado aparecerá en el dashboard
 
-#### 4️⃣ Generar la versión 1 del dataset
+#### 4️⃣ Generar la versión 1
+
+⚠️ **IMPORTANTE:** Sin generar una versión, no se puede descargar el dataset programáticamente.
 
 Después de forkear, el dataset no tiene versiones generadas. Es necesario crear la versión 1:
 
 1. En el workspace personal, abrir el proyecto recién forkeado (ej: `car-damages-v3gyz-XXXXX`)
-2. Ir a la pestaña **"Generate"** o **"Versions"**
+2. Ir a la pestaña **"Versions"** (en el menú lateral izquierdo bajo "DATA") o **"Generate"**
 3. Hacer clic en **"Create New Version"**
 4. Configurar preprocessing (opcional - usar valores por defecto):
    - Auto-Orient: ✅
@@ -106,9 +124,9 @@ Después de forkear, el dataset no tiene versiones generadas. Es necesario crear
 7. Esperar a que se genere la versión (puede tardar unos minutos)
 8. Una vez generada, aparecerá **"Version 1"** en la lista de versiones
 
-#### 5️⃣ Obtener los identificadores del proyecto
+#### 5️⃣ Obtener los identificadores del dataset
 
-Una vez generada la versión, se necesitan 3 valores para configurar el `.env`:
+Una vez generada la versión, se necesitan 4 valores para configurar el `.env`:
 
 **a) ROBOFLOW_WORKSPACE:**
 - Es el nombre de usuario de Roboflow
@@ -130,13 +148,20 @@ Una vez generada la versión, se necesitan 3 valores para configurar el `.env`:
 - Es el número de versión generada (normalmente `1`)
 - Se puede ver en la pestaña "Versions" del proyecto
 
+---
+
 #### 🎯 Ejemplo de valores obtenidos
 
-Si el workspace es `juan-perez-abc` y el proyecto forkeado es `car-damages-v3gyz-9z8x7`:
+Si el workspace es `juan-perez-abc` y el dataset forkeado es `car-damages-v3gyz-9z8x7`:
 
 ```bash
+# API Key
 ROBOFLOW_API_KEY=AbCdEf123456GhIjKl789012
+
+# Workspace
 ROBOFLOW_WORKSPACE=juan-perez-abc
+
+# Dataset (Car Damages)
 ROBOFLOW_PROJECT=car-damages-v3gyz-9z8x7
 ROBOFLOW_VERSION=1
 ```
@@ -152,10 +177,13 @@ ROBOFLOW_VERSION=1
 3. **Configurar el archivo `.env`:**
    - Solicitar el archivo `.env` al administrador del proyecto (se comparte por canal seguro)
    - Ubicar el archivo `.env` en la raíz del proyecto
-   - Editar el archivo y completar las variables de Roboflow con los valores obtenidos en la sección [Configuración de Roboflow](#-configuración-de-roboflow-prerequisito):
+   - Editar el archivo y completar las variables de Roboflow con los valores obtenidos en la sección [Configuración de Roboflow](#-configuración-de-roboflow-prerrequisito):
      ```bash
+     # API Key y Workspace
      ROBOFLOW_API_KEY=tu_api_key_personal_aqui
      ROBOFLOW_WORKSPACE=tu_username_de_roboflow
+     
+     # Dataset (Car Damages)
      ROBOFLOW_PROJECT=car-damages-v3gyz-XXXXX
      ROBOFLOW_VERSION=1
      ```
@@ -175,7 +203,7 @@ ROBOFLOW_VERSION=1
    mkdir airflow\plugins
    ```
    
-   ℹ️ **Sobre `car_damage_detection/`:** Esta carpeta ya existe en el repositorio (con `.gitkeep`). Docker la montará como volumen y el DAG `data_preparation` creará automáticamente la subcarpeta `data/` cuando se ejecute por primera vez.
+   ℹ️ **Sobre `car_damage_detection/`:** Esta carpeta ya existe en el repositorio (con `.gitkeep`). Docker la montará como volumen y los DAGs de preparación de datos crearán automáticamente las subcarpetas `car-damages/` y `car-damage-detection/` cuando se ejecuten por primera vez.
 
 5. En Linux o MacOS, en el archivo `.env`, reemplazar `AIRFLOW_UID` por el del usuario a utilizar (para encontrar el UID, utilizar el comando `id -u <username>`). De lo contrario, Airflow dejará sus carpetas internas como root y no será posible subir DAGs (en `airflow/dags`) o plugins, etc.
 
@@ -198,36 +226,48 @@ Todos los puertos y otras configuraciones se pueden modificar en el archivo `.en
 
 ## 📂 Preparación de Datos
 
-Una vez levantados los servicios, el primer paso es descargar y preparar el dataset:
+Una vez levantados los servicios, el primer paso es descargar y preparar el dataset ejecutando el DAG correspondiente:
+
+### Descarga y Preparación del Dataset
 
 1. **Acceder a Airflow**: http://localhost:8080
    Solicitar usuario y contraseña al administrador
 
-2. **Ejecutar el DAG `data_preparation`**:
-   - Buscar el DAG `data_preparation` en la lista
+2. **Ejecutar el DAG `data_preparation_semantic`**:
+   - Buscar el DAG `data_preparation_semantic` en la lista
    - Hacer clic en el botón "▶️ Trigger DAG"
    - Esperar a que se complete (tarda varios minutos dependiendo de la conexión a internet)
 
 3. **Verificar los datos descargados**:
-   - Los datos se guardan automáticamente en `car_damage_detection/data/`
+   - Los datos se guardan automáticamente en `car_damage_detection/car-damages/`
    - Estructura generada:
      ```
-     car_damage_detection/data/
+     car_damage_detection/car-damages/
      ├── car-damages-forked/      # Datos raw de Roboflow (COCO format)
      └── car-damages-ready/        # Datos procesados
          ├── instance/             # YOLOv8 instance segmentation format
          │   ├── train/, valid/, test/
+         │   │   ├── images/
+         │   │   └── labels/
          │   └── data.yaml
          └── semantic/             # Máscaras PNG para semantic segmentation
              ├── train/, valid/, test/
+             │   ├── images/
+             │   └── masks/
      ```
 
 **El DAG automáticamente:**
 - ✅ Descarga el dataset desde Roboflow
-- ✅ Convierte las anotaciones COCO a formato YOLOv8
-- ✅ Genera máscaras PNG para semantic segmentation
+- ✅ Convierte las anotaciones COCO a formato YOLOv8 (para instance segmentation)
+- ✅ Genera máscaras PNG (para semantic segmentation)
 - ✅ Valida la integridad de los datos
 - ✅ Crea toda la estructura de carpetas necesaria
+
+**Resultado:** Los datos quedan listos en **DOS formatos** para entrenar ambos modelos:
+- `instance/` → Para entrenar YOLOv8-seg (instance segmentation)
+- `semantic/` → Para entrenar U-Net/DeepLab (semantic segmentation)
+
+> 📖 **Ver [METODOLOGIA.md](METODOLOGIA.md)** para entender cómo se usan estos dos formatos en el proyecto.
 
 ## 🧪 Ejemplos
 

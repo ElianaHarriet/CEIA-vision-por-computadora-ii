@@ -1,0 +1,30 @@
+[tool.pylint.MASTER]
+ignore-paths = []
+
+[tool.pylint."MESSAGES CONTROL"]
+disable = [
+    "import-error",
+    "no-member",
+    "no-name-in-module",
+]
+
+[tool.pylint.TYPECHECK]
+ignored-modules = [
+    "torch",
+    "torchvision", 
+    "ultralytics",
+    "cv2",
+    "mlflow",
+    "segmentation_models_pytorch",
+    "albumentations",
+    "airflow",
+]
+
+[tool.pyright]
+# Para VSCode con Pylance
+reportMissingImports = false
+reportMissingModuleSource = false
+
+[tool.mypy]
+# Para mypy
+ignore_missing_imports = true
