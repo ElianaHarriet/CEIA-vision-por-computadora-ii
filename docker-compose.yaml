@@ -291,12 +291,12 @@ services:
   
   airflow-worker:
     <<: *airflow-common
-    command: celery worker -c 2
+    command: airflow celery worker -c 2 -H worker@%h
     healthcheck:
       # yamllint disable rule:line-length
       test:
         - "CMD-SHELL"
-        - 'celery --app airflow.providers.celery.executors.celery_executor.app inspect ping -d "celery@$${HOSTNAME}" || celery --app airflow.executors.celery_executor.app inspect ping -d "celery@$${HOSTNAME}"'
+        - 'celery --app airflow.providers.celery.executors.celery_executor.app inspect ping -d "worker@$${HOSTNAME}" || celery --app airflow.executors.celery_executor.app inspect ping -d "worker@$${HOSTNAME}"'
       interval: 60s
       timeout: 10s
       retries: 5
