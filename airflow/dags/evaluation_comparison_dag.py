@@ -17,7 +17,6 @@ from airflow import DAG
 from airflow.operators.python import PythonOperator
 import numpy as np
 from PIL import Image
-import mlflow
 
 # Add dags directory to Python path
 dags_path = Path(__file__).parent
@@ -25,15 +24,6 @@ if str(dags_path) not in sys.path:
     sys.path.insert(0, str(dags_path))
 
 from evaluation.config import EvaluationConfig
-from evaluation.model_loader import YOLOModelLoader, UNetModelLoader
-from evaluation.dataset_loader import TestDatasetLoader
-from evaluation.predictor import YOLOPredictor, UNetPredictor
-from evaluation.mask_flattener import MaskFlattener
-from evaluation.metrics_calculator import MetricsCalculator
-from evaluation.metrics_calculator import ComparisonCalculator
-from evaluation.visualizer import ComparisonVisualizer
-from evaluation.report_generator import ComparisonReport
-from evaluation.hypothesis_validator import HypothesisValidator
 
 # DAG configuration
 default_args = {
@@ -68,6 +58,7 @@ RESULTS_PATH = EvaluationConfig.get_results_path()
 
 def check_models_availability(**context):
     """Verificar que los modelos entrenados estén disponibles."""
+    from evaluation.model_loader import YOLOModelLoader, UNetModelLoader
     yolo_loader = YOLOModelLoader(MLFLOW_URI)
     unet_loader = UNetModelLoader(MLFLOW_URI)
     yolo_version = yolo_loader.check_model_availability(
@@ -90,6 +81,7 @@ def check_models_availability(**context):
 
 def load_test_dataset(**context):
     """Cargar dataset de test."""
+    from evaluation.dataset_loader import TestDatasetLoader
     loader = TestDatasetLoader(INSTANCE_PATH, SEMANTIC_PATH)
     test_images = loader.load_test_images()
     gt_masks = loader.load_ground_truth_masks(list(test_images.keys()))
@@ -103,6 +95,8 @@ def load_test_dataset(**context):
 
 def predict_instance_model(**context):
     """Hacer predicciones con modelo instance (YOLOv8-seg)."""
+    from evaluation.model_loader import YOLOModelLoader
+    from evaluation.predictor import YOLOPredictor
     test_images = context['ti'].xcom_pull(
         task_ids='load_test_dataset',
         key='test_images'
@@ -117,6 +111,8 @@ def predict_instance_model(**context):
 
 def predict_semantic_model(**context):
     """Hacer predicciones con modelo semantic (U-Net)."""
+    from evaluation.model_loader import UNetModelLoader
+    from evaluation.predictor import UNetPredictor
     test_images = context['ti'].xcom_pull(
         task_ids='load_test_dataset',
         key='test_images'
@@ -134,6 +130,7 @@ def predict_semantic_model(**context):
 
 def flatten_instance_masks(**context):
     """Aplanar máscaras del modelo instance."""
+    from evaluation.mask_flattener import MaskFlattener
     predictions = context['ti'].xcom_pull(
         task_ids='predict_instance_model',
         key='instance_predictions'
@@ -146,6 +143,7 @@ def flatten_instance_masks(**context):
 
 def calculate_metrics(**context):
     """Calcular métricas de evaluación para ambos modelos."""
+    from evaluation.metrics_calculator import MetricsCalculator, ComparisonCalculator
     gt_masks = context['ti'].xcom_pull(
         task_ids='load_test_dataset',
         key='gt_masks'
@@ -186,6 +184,7 @@ def calculate_metrics(**context):
 
 def generate_visualizations(**context):
     """Generar visualizaciones de comparación."""
+    from evaluation.visualizer import ComparisonVisualizer
     all_metrics = context['ti'].xcom_pull(
         task_ids='calculate_metrics',
         key='all_metrics'
@@ -256,6 +255,7 @@ def _prepare_samples(test_imgs, gt_masks, inst_preds, sem_preds, metrics):
 
 def generate_comparison_report(**context):
     """Generar reporte de comparación."""
+    from evaluation.report_generator import ComparisonReport
     all_metrics = context['ti'].xcom_pull(
         task_ids='calculate_metrics',
         key='all_metrics'
@@ -281,6 +281,7 @@ def generate_comparison_report(**context):
 
 def validate_hypothesis(**context):
     """Validar o refutar la hipótesis del proyecto."""
+    from evaluation.hypothesis_validator import HypothesisValidator
     all_metrics = context['ti'].xcom_pull(
         task_ids='calculate_metrics',
         key='all_metrics'
@@ -296,6 +297,7 @@ def validate_hypothesis(**context):
 
 def log_comparison_to_mlflow(**context):
     """Registrar comparación completa en MLflow."""
+    import mlflow
     mlflow.set_tracking_uri(MLFLOW_URI)
     mlflow.set_experiment(EXPERIMENT_NAME)
     all_metrics = context['ti'].xcom_pull(
@@ -330,6 +332,7 @@ def log_comparison_to_mlflow(**context):
 
 def _log_metrics_to_mlflow(all_metrics):
     """Log metrics to MLflow."""
+    import mlflow
     comp = all_metrics['comparison']
     for key, vals in comp.items():
         if key.startswith('mean_'):
@@ -340,6 +343,7 @@ def _log_metrics_to_mlflow(all_metrics):
 
 def _log_params_to_mlflow(model_info):
     """Log params to MLflow."""
+    import mlflow
     mlflow.log_param('instance_run_id', model_info['instance_run_id'])
     mlflow.log_param('semantic_run_id', model_info['semantic_run_id'])
     mlflow.log_param('instance_version', model_info['instance_version'])
@@ -348,6 +352,7 @@ def _log_params_to_mlflow(model_info):
 
 def _log_artifacts_to_mlflow(viz_path, report_path):
     """Log artifacts to MLflow."""
+    import mlflow
     viz_dir = Path(viz_path)
     for file in viz_dir.glob('*.png'):
         mlflow.log_artifact(str(file), 'visualizations')

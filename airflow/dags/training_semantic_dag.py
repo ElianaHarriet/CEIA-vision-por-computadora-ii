@@ -21,11 +21,6 @@ if str(dags_path) not in sys.path:
 
 from training.config import TrainingConfig, UNetConfig
 from training.validators import SemanticDataValidator
-from training.environment import UNetEnvironment
-from training.mlflow_manager import MLflowManager
-from training.dataloader_factory import DataLoaderFactory
-from training.unet_trainer import UNetTrainer
-from training.model_registry import ModelRegistry
 
 # DAG configuration
 default_args = {
@@ -62,12 +57,14 @@ def check_data_availability(**context):
 
 def setup_training_environment(**context):
     """Configurar entorno de entrenamiento."""
+    from training.environment import UNetEnvironment
     env_setup = UNetEnvironment(MLFLOW_URI, EXPERIMENT_NAME)
     return env_setup.setup()
 
 
 def create_dataloaders(**context):
     """Crear DataLoaders para train, valid, test."""
+    from training.dataloader_factory import DataLoaderFactory
     factory = DataLoaderFactory(
         DATA_PATH,
         UNetConfig.IMG_SIZE,
@@ -89,6 +86,9 @@ def create_dataloaders(**context):
 
 def train_unet_model(**context):
     """Entrenar modelo U-Net."""
+    from training.dataloader_factory import DataLoaderFactory
+    from training.mlflow_manager import MLflowManager
+    from training.unet_trainer import UNetTrainer
     factory = DataLoaderFactory(
         DATA_PATH,
         UNetConfig.IMG_SIZE,
@@ -112,6 +112,7 @@ def train_unet_model(**context):
 
 def register_model_in_registry(**context):
     """Registrar modelo en MLflow Model Registry."""
+    from training.model_registry import ModelRegistry
     run_id = context['ti'].xcom_pull(
         task_ids='train_unet_model',
         key='run_id'

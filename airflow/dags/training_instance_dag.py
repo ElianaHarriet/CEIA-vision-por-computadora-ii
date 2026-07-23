@@ -13,7 +13,6 @@ from pathlib import Path
 from datetime import datetime, timedelta
 from airflow import DAG
 from airflow.operators.python import PythonOperator
-import mlflow
 
 # Add dags directory to Python path
 dags_path = Path(__file__).parent
@@ -22,10 +21,6 @@ if str(dags_path) not in sys.path:
 
 from training.config import TrainingConfig, YOLOConfig
 from training.validators import InstanceDataValidator
-from training.environment import YOLOEnvironment
-from training.mlflow_manager import MLflowManager
-from training.yolo_trainer import YOLOTrainer, YOLOValidator
-from training.model_registry import YOLOModelRegistry
 
 # DAG configuration
 default_args = {
@@ -62,12 +57,15 @@ def check_data_availability(**context):
 
 def setup_training_environment(**context):
     """Configurar entorno de entrenamiento."""
+    from training.environment import YOLOEnvironment
     env_setup = YOLOEnvironment(MLFLOW_URI, EXPERIMENT_NAME)
     return env_setup.setup()
 
 
 def train_yolov8_model(**context):
     """Entrenar modelo YOLOv8-seg."""
+    from training.mlflow_manager import MLflowManager
+    from training.yolo_trainer import YOLOTrainer
     mlflow_mgr = MLflowManager(MLFLOW_URI, EXPERIMENT_NAME)
     with mlflow_mgr.start_run("yolov8-seg-instance") as run:
         run_id = run.info.run_id
@@ -92,6 +90,7 @@ def register_model_in_registry(**context):
     )
     if not run_id:
         raise ValueError("No run_id from training")
+    from training.model_registry import YOLOModelRegistry
     registry = YOLOModelRegistry(MLFLOW_URI)
     result = registry.register_yolo(run_id, MODEL_NAME, YOLOConfig.EPOCHS)
     context['ti'].xcom_push(key='model_version', value=result['version'])
@@ -100,6 +99,9 @@ def register_model_in_registry(**context):
 
 def validate_trained_model(**context):
     """Validar modelo entrenado."""
+    import mlflow
+    from training.yolo_trainer import YOLOValidator
+    from training.mlflow_manager import MLflowManager
     model_path = context['ti'].xcom_pull(
         task_ids='train_yolov8_model',
         key='model_path'
