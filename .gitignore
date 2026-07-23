@@ -194,5 +194,8 @@ env/
 # Carpeta de secretos para compartir (no commitear)
 secrets-to-share/
 
+# Dot-directories (temporary, config, etc.)
+.*/
+
 # VSCode settings (opcional - comentar si el equipo quiere compartir settings)
 # .vscode/

@@ -23,8 +23,10 @@
 
 # WARNING: This configuration is for local development. Do not use it in a production deployment.
 x-airflow-common: &airflow-common
-  build: './dockerfiles/airflow'
-  image: ${AIRFLOW_IMAGE_NAME:-extending_airflow:latest}
+  build:
+    context: './dockerfiles/airflow'
+    dockerfile: Dockerfile.minimal
+  image: ${AIRFLOW_IMAGE_NAME:-extending_airflow:minimal}
   profiles:
     - airflow
     - all
@@ -180,7 +182,7 @@ services:
       postgres:
         condition: service_healthy
     ports:
-      - "${MLFLOW_PORT:-5000}:5000"
+      - "${MLFLOW_PORT:-5001}:5000"
     networks:
       - frontend
       - backend
@@ -291,6 +293,8 @@ services:
   
   airflow-worker:
     <<: *airflow-common
+    build: './dockerfiles/airflow'
+    image: ${AIRFLOW_IMAGE_NAME:-extending_airflow:latest}
     command: airflow celery worker -c 2 -H worker@%h
     healthcheck:
       # yamllint disable rule:line-length

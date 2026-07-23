@@ -1,5 +1,4 @@
 # Minimal requirements for Airflow without heavy ML dependencies
-mlflow[extras]~=2.10
 boto3~=1.34
 roboflow~=1.1
 Pillow~=10.0
