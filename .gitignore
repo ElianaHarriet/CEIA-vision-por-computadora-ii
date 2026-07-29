@@ -194,6 +194,7 @@ env/
 
 # Carpeta de secretos para compartir (no commitear)
 secrets-to-share/
+runpod_test_payload.json
 
 # Dot-directories (temporary, config, etc.)
 .*/

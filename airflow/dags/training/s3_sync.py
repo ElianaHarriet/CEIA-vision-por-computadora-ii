@@ -1,5 +1,13 @@
-"""Upload local dataset directories to MinIO (S3-compatible) storage."""
+"""Upload local dataset directories to MinIO (S3-compatible) storage.
+
+Uploads a single tar.gz archive instead of one S3 object per file: with
+~4600 files, per-file HTTP round-trips through the Cloudflare tunnel took
+~1.5h even though MinIO itself answered each request in ~1ms. One archive
+turns thousands of round-trips into one.
+"""
 import os
+import tarfile
+import tempfile
 from pathlib import Path
 import boto3
 
@@ -15,14 +23,26 @@ def _get_s3_client():
     )
 
 
+def archive_key(prefix: str) -> str:
+    """S3 key for the dataset archive of a given prefix."""
+    return f"{prefix.rstrip('/')}.tar.gz"
+
+
 def upload_dir_to_s3(local_dir: str, bucket: str, prefix: str) -> int:
-    """Recursively upload local_dir to s3://bucket/prefix. Returns file count."""
+    """Tar+gzip local_dir and upload it as s3://bucket/<prefix>.tar.gz.
+
+    Returns the number of files packed into the archive.
+    """
     client = _get_s3_client()
     local_path = Path(local_dir)
     files = [p for p in local_path.rglob("*") if p.is_file()]
-    for file_path in files:
-        relative_key = file_path.relative_to(local_path).as_posix()
-        key = f"{prefix.rstrip('/')}/{relative_key}"
-        client.upload_file(str(file_path), bucket, key)
-    print(f"✓ Uploaded {len(files)} files from {local_dir} to s3://{bucket}/{prefix}")
+
+    with tempfile.NamedTemporaryFile(suffix=".tar.gz") as tmp:
+        with tarfile.open(tmp.name, "w:gz") as tar:
+            for file_path in files:
+                tar.add(file_path, arcname=file_path.relative_to(local_path).as_posix())
+        key = archive_key(prefix)
+        client.upload_file(tmp.name, bucket, key)
+
+    print(f"✓ Uploaded {len(files)} files from {local_dir} to s3://{bucket}/{key}")
     return len(files)

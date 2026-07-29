@@ -1,5 +1,7 @@
-"""Download a dataset directory from MinIO exposed via a Cloudflare Quick Tunnel."""
+"""Download a dataset archive from MinIO exposed via a Cloudflare Quick Tunnel."""
 import os
+import tarfile
+import tempfile
 from pathlib import Path
 import boto3
 from botocore.config import Config
@@ -21,19 +23,19 @@ def _get_s3_client(endpoint_url: str):
 
 
 def download_dataset(endpoint_url: str, bucket: str, prefix: str, local_dir: str) -> int:
-    """Recursively download s3://bucket/prefix into local_dir. Returns file count."""
+    """Download s3://bucket/<prefix>.tar.gz and extract it into local_dir.
+
+    Returns the number of files extracted.
+    """
     client = _get_s3_client(endpoint_url)
-    paginator = client.get_paginator("list_objects_v2")
-    count = 0
-    for page in paginator.paginate(Bucket=bucket, Prefix=prefix):
-        for obj in page.get("Contents", []):
-            key = obj["Key"]
-            relative_key = key[len(prefix):].lstrip("/")
-            if not relative_key:
-                continue
-            dest = Path(local_dir) / relative_key
-            dest.parent.mkdir(parents=True, exist_ok=True)
-            client.download_file(bucket, key, str(dest))
-            count += 1
-    print(f"✓ Downloaded {count} files from s3://{bucket}/{prefix} to {local_dir}")
+    key = f"{prefix.rstrip('/')}.tar.gz"
+    Path(local_dir).mkdir(parents=True, exist_ok=True)
+
+    with tempfile.NamedTemporaryFile(suffix=".tar.gz") as tmp:
+        client.download_file(bucket, key, tmp.name)
+        with tarfile.open(tmp.name, "r:gz") as tar:
+            tar.extractall(local_dir, filter="data")
+            count = sum(1 for m in tar.getmembers() if m.isfile())
+
+    print(f"✓ Downloaded and extracted {count} files from s3://{bucket}/{key} to {local_dir}")
     return count
