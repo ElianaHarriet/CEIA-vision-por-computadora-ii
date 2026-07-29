@@ -21,11 +21,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Show workspace contents (debug)
+      - name: Free disk space
         run: |
-          pwd
-          ls -la
-          ls -la runpod_handler/
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+          sudo docker image prune -a -f
+          df -h /
 
       - uses: docker/login-action@v3
         with:
