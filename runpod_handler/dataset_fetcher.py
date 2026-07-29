@@ -4,7 +4,14 @@ import tarfile
 import tempfile
 from pathlib import Path
 import boto3
+from boto3.s3.transfer import TransferConfig
 from botocore.config import Config
+
+# Cloudflare Quick Tunnels reject single requests/responses above ~100MB
+# (observed: a single GetObject on a 164MB file failed with HTTP 530).
+# Forcing boto3 to fetch the archive in ranged chunks keeps each request
+# well under that limit while still avoiding one-request-per-file.
+_DOWNLOAD_CONFIG = TransferConfig(multipart_threshold=20 * 1024 * 1024, multipart_chunksize=20 * 1024 * 1024)
 
 
 def _get_s3_client(endpoint_url: str):
@@ -32,7 +39,7 @@ def download_dataset(endpoint_url: str, bucket: str, prefix: str, local_dir: str
     Path(local_dir).mkdir(parents=True, exist_ok=True)
 
     with tempfile.NamedTemporaryFile(suffix=".tar.gz") as tmp:
-        client.download_file(bucket, key, tmp.name)
+        client.download_file(bucket, key, tmp.name, Config=_DOWNLOAD_CONFIG)
         with tarfile.open(tmp.name, "r:gz") as tar:
             tar.extractall(local_dir, filter="data")
             count = sum(1 for m in tar.getmembers() if m.isfile())
