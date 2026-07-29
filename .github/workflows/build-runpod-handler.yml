@@ -7,6 +7,13 @@ on:
         description: "Tag para la imagen (además de 'latest')"
         required: false
         default: "latest"
+  push:
+    branches:
+      - ci/runpod-docker-build
+    paths:
+      - "runpod_handler/**"
+      - "airflow/dags/training/**"
+      - ".github/workflows/build-runpod-handler.yml"
 
 jobs:
   build-push:
@@ -29,4 +36,4 @@ jobs:
           push: true
           tags: |
             ${{ secrets.DOCKERHUB_USERNAME }}/runpod-training-handler:latest
-            ${{ secrets.DOCKERHUB_USERNAME }}/runpod-training-handler:${{ github.event.inputs.tag }}
+            ${{ secrets.DOCKERHUB_USERNAME }}/runpod-training-handler:${{ github.event.inputs.tag || 'latest' }}
