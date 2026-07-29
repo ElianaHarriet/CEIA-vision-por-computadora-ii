@@ -88,8 +88,14 @@ class YOLOTrainer:
         """Log metrics to MLflow."""
         for key, value in metrics.items():
             if isinstance(value, (int, float)):
-                self.mlflow.log_metric(key, value)
-                print(f"  {key}: {value}")
+                safe_key = self._sanitize_metric_name(key)
+                self.mlflow.log_metric(safe_key, value)
+                print(f"  {safe_key}: {value}")
+
+    @staticmethod
+    def _sanitize_metric_name(name: str) -> str:
+        """Strip characters MLflow doesn't allow in metric names, e.g. parentheses."""
+        return name.replace("(", "").replace(")", "")
 
     def _get_results(self):
         """Get training results."""
