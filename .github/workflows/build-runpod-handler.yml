@@ -34,6 +34,7 @@ jobs:
           file: runpod_handler/Dockerfile
           platforms: linux/amd64
           push: true
+          provenance: false
           tags: |
             ${{ secrets.DOCKERHUB_USERNAME }}/runpod-training-handler:latest
             ${{ secrets.DOCKERHUB_USERNAME }}/runpod-training-handler:${{ github.event.inputs.tag || 'latest' }}
