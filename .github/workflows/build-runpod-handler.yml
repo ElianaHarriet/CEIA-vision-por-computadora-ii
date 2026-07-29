@@ -21,6 +21,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Show workspace contents (debug)
+        run: |
+          pwd
+          ls -la
+          ls -la runpod_handler/
+
       - uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
@@ -28,13 +34,11 @@ jobs:
 
       - uses: docker/setup-buildx-action@v3
 
-      - uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: runpod_handler/Dockerfile
-          platforms: linux/amd64
-          push: true
-          provenance: false
-          tags: |
-            ${{ secrets.DOCKERHUB_USERNAME }}/runpod-training-handler:latest
-            ${{ secrets.DOCKERHUB_USERNAME }}/runpod-training-handler:${{ github.event.inputs.tag || 'latest' }}
+      - name: Build and push
+        run: |
+          docker buildx build \
+            --platform linux/amd64 \
+            --file runpod_handler/Dockerfile \
+            --tag ${{ secrets.DOCKERHUB_USERNAME }}/runpod-training-handler:latest \
+            --push \
+            .
