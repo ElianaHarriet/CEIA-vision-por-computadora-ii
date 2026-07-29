@@ -25,7 +25,17 @@ def _get_s3_client(endpoint_url: str):
         endpoint_url=endpoint_url,
         aws_access_key_id=os.environ["AWS_ACCESS_KEY_ID"],
         aws_secret_access_key=os.environ["AWS_SECRET_ACCESS_KEY"],
-        config=Config(signature_version="s3v4"),
+        config=Config(
+            signature_version="s3v4",
+            # Explicit timeouts: a stalled Cloudflare tunnel connection can
+            # trickle bytes slowly enough to never trip botocore's default
+            # read timeout, hanging a ranged chunk (and the whole job) far
+            # longer than any single request should take. Fail fast instead
+            # so a bad chunk gets retried rather than hanging indefinitely.
+            connect_timeout=10,
+            read_timeout=30,
+            retries={"max_attempts": 5, "mode": "standard"},
+        ),
     )
 
 
