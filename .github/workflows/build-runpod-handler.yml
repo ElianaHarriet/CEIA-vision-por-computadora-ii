@@ -1,0 +1,32 @@
+name: Build and push runpod_handler image
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag para la imagen (además de 'latest')"
+        required: false
+        default: "latest"
+
+jobs:
+  build-push:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: runpod_handler/Dockerfile
+          platforms: linux/amd64
+          push: true
+          tags: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/runpod-training-handler:latest
+            ${{ secrets.DOCKERHUB_USERNAME }}/runpod-training-handler:${{ github.event.inputs.tag }}
