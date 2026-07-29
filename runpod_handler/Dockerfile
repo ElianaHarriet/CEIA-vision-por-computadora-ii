@@ -14,13 +14,13 @@ RUN apt-get update \
   && apt-get install -y --no-install-recommends \
          libgl1-mesa-glx \
          libglib2.0-0 \
-  && apt-get autoremove -yqq --purge \
+  && (apt-get purge -yqq --autoremove python3-blinker || true) \
   && apt-get clean \
   && rm -rf /var/lib/apt/lists/*
 
 COPY runpod_handler/requirements.txt /app/requirements.txt
 RUN pip install --upgrade pip \
- && pip install --no-cache-dir --ignore-installed -r /app/requirements.txt
+ && pip install --no-cache-dir -r /app/requirements.txt
 
 COPY airflow/dags/training /app/training
 COPY runpod_handler/handler.py /app/handler.py
