@@ -1,0 +1,19 @@
+mlflow[extras]~=2.10
+boto3~=1.34
+roboflow~=1.1
+Pillow~=10.0
+psycopg2-binary~=2.9
+
+# ML Training Libraries
+ultralytics>=8.0.0
+torch>=2.0.0
+torchvision>=0.15.0
+opencv-python-headless>=4.8.0
+segmentation-models-pytorch>=0.3.3
+albumentations>=1.3.0
+tqdm>=4.65.0
+
+# Evaluation Libraries
+matplotlib>=3.7.0
+scikit-learn>=1.3.0
+scipy>=1.11.0

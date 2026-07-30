@@ -1,0 +1,18 @@
+fastapi>=0.116
+uvicorn>=0.27
+python-multipart>=0.0.9
+
+# ML and Model Serving
+mlflow>=2.10.0
+# torch>=2.0.0  # TODO: Uncomment when implementing
+# torchvision>=0.15.0  # TODO: Uncomment when implementing
+# ultralytics>=8.0.0  # TODO: Uncomment for YOLOv8
+# segmentation-models-pytorch>=0.3.0  # TODO: Uncomment for U-Net
+
+# Image Processing
+# pillow>=10.0.0  # TODO: Uncomment when implementing
+# opencv-python>=4.8.0  # TODO: Uncomment when implementing
+numpy>=1.24.0
+
+# AWS/S3 (for MLflow artifacts)
+boto3>=1.28.0

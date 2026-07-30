@@ -1,0 +1,17 @@
+[MASTER]
+# Extensiones a cargar
+extension-pkg-whitelist=torch,cv2,numpy
+
+[MESSAGES CONTROL]
+# Desactivar warnings específicos
+disable=
+    import-error,
+    no-member,
+    no-name-in-module
+
+[TYPECHECK]
+# Módulos que se ignoran en type checking
+ignored-modules=torch,torchvision,ultralytics,cv2,mlflow,segmentation_models_pytorch,albumentations,airflow
+
+# Clases que se ignoran
+ignored-classes=torch,YOLO,mlflow

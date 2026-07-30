@@ -1,31 +1,30 @@
-[tool.poetry]
-name = "car-damage-detection"
-version = "0.1.0"
-description = "Sistema de Detección y Evaluación de Daños en Vehículos"
-authors = [
-    "Santiago Bartolini Rizzo <santiagobartolini@gmail.com>",
-    "Luis Ali <aliluis@gmail.com>",
-    "Eliana Harriet <eharriet@fi.uba.ar>",
+[tool.pylint.MASTER]
+ignore-paths = []
+
+[tool.pylint."MESSAGES CONTROL"]
+disable = [
+    "import-error",
+    "no-member",
+    "no-name-in-module",
 ]
 
-[tool.poetry.dependencies]
-python = ">=3.11"
-ultralytics = "*"
-torch = "*"
-torchvision = "*"
-transformers = "*"
-opencv-python = "*"
-matplotlib = "*"
-seaborn = "*"
-pandas = "*"
-numpy = "*"
-scikit-learn = "*"
-scikit-image = "*"
-roboflow = "*"
-jupyter = "*"
-ipykernel = "*"
-pillow = "*"
+[tool.pylint.TYPECHECK]
+ignored-modules = [
+    "torch",
+    "torchvision", 
+    "ultralytics",
+    "cv2",
+    "mlflow",
+    "segmentation_models_pytorch",
+    "albumentations",
+    "airflow",
+]
 
-[build-system]
-requires = ["poetry-core"]
-build-backend = "poetry.core.masonry.api"
+[tool.pyright]
+# Para VSCode con Pylance
+reportMissingImports = false
+reportMissingModuleSource = false
+
+[tool.mypy]
+# Para mypy
+ignore_missing_imports = true
