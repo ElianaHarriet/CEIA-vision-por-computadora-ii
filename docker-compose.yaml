@@ -64,6 +64,7 @@ x-airflow-common: &airflow-common
     MODEL_STAGE: ${MODEL_STAGE:-Production}
     MODEL_VERSION_INSTANCE: ${MODEL_VERSION_INSTANCE:-latest}
     MODEL_VERSION_SEMANTIC: ${MODEL_VERSION_SEMANTIC:-latest}
+    RUNPOD_ENDPOINT_ID: ${RUNPOD_ENDPOINT_ID:-}
   volumes:
     - ${AIRFLOW_PROJ_DIR:-./airflow}/dags:/opt/airflow/dags
     - ${AIRFLOW_PROJ_DIR:-./airflow}/logs:/opt/airflow/logs
@@ -203,6 +204,41 @@ services:
       timeout: 10s
       retries: 3
 
+  # Cloudflare Quick Tunnels: exponen MLflow y MinIO públicamente para que el
+  # endpoint de RunPod (fuera de la red de docker-compose) pueda escribir
+  # métricas/artefactos y leer el dataset. La URL (*.trycloudflare.com) es
+  # gratuita pero cambia en cada reinicio del contenedor: no reiniciar estos
+  # servicios (ni mlflow/s3) con un training de RunPod activo.
+  cloudflared-mlflow:
+    restart: unless-stopped
+    image: cloudflare/cloudflared:latest
+    container_name: cloudflared-mlflow
+    profiles:
+      - airflow
+      - all
+    command: tunnel --url http://mlflow:5000 --logfile /var/log/cloudflared/mlflow.log
+    depends_on:
+      - mlflow
+    networks:
+      - backend
+    volumes:
+      - cloudflared_logs:/var/log/cloudflared
+
+  cloudflared-s3:
+    restart: unless-stopped
+    image: cloudflare/cloudflared:latest
+    container_name: cloudflared-s3
+    profiles:
+      - airflow
+      - all
+    command: tunnel --url http://s3:9000 --logfile /var/log/cloudflared/s3.log
+    depends_on:
+      - s3
+    networks:
+      - backend
+    volumes:
+      - cloudflared_logs:/var/log/cloudflared
+
   fastapi:
     restart: always
     build: "./dockerfiles/fastapi"
@@ -296,6 +332,19 @@ services:
     build: './dockerfiles/airflow'
     image: ${AIRFLOW_IMAGE_NAME:-extending_airflow:latest}
     command: airflow celery worker -c 2 -H worker@%h
+    # Volumes explícitos (no solo el anchor de airflow-common): un `<<:` y un
+    # `volumes:` propio en el mismo mapping no se mergean, el propio pisa al
+    # heredado. Se repite la lista de airflow-common y se agrega, de solo
+    # lectura, el log del túnel de Cloudflare para resolver la URL pública
+    # vigente de MLflow/MinIO (ver training/tunnel_url.py).
+    volumes:
+      - ${AIRFLOW_PROJ_DIR:-./airflow}/dags:/opt/airflow/dags
+      - ${AIRFLOW_PROJ_DIR:-./airflow}/logs:/opt/airflow/logs
+      - ${AIRFLOW_PROJ_DIR:-./airflow}/config:/opt/airflow/config
+      - ${AIRFLOW_PROJ_DIR:-./airflow}/plugins:/opt/airflow/plugins
+      - ${AIRFLOW_PROJ_DIR:-./airflow}/secrets:/opt/secrets
+      - ./car_damage_detection:/opt/airflow/car_damage_detection
+      - cloudflared_logs:/var/log/cloudflared:ro
     healthcheck:
       # yamllint disable rule:line-length
       test:
@@ -446,3 +495,4 @@ networks:
 volumes:
   db_data:
   minio_data:
+  cloudflared_logs:
