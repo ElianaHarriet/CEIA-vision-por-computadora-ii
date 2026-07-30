@@ -78,10 +78,33 @@ def download_dataset_task(**context):
     )
     
     fs = FileSystemOperations()
+    
+    # Check if dataset already exists
+    if _dataset_already_exists(fs, paths):
+        print(f"✓ Dataset ya descargado en {paths.raw}")
+        print("⏭️  Saltando descarga (usar 'Clear' en Airflow UI para forzar re-descarga)")
+        return str(paths.raw)
+    
     _clean_existing_data(fs, paths)
     _download_from_roboflow(config, paths, fs)
     _log_download_stats(paths, fs)
     return str(paths.raw)
+
+
+def _dataset_already_exists(fs: FileSystemOperations, paths: DatasetPaths) -> bool:
+    """Check if dataset was already downloaded."""
+    if not paths.raw.exists():
+        return False
+    
+    # Verify that all splits exist and have images
+    for split in SPLITS:
+        split_dir = paths.raw / split
+        if not split_dir.exists():
+            return False
+        if fs.count_files(split_dir, "*.jpg") == 0:
+            return False
+    
+    return True
 
 
 def _clean_existing_data(fs: FileSystemOperations, paths: DatasetPaths) -> None:
@@ -207,6 +230,7 @@ check_api_key = PythonOperator(
 download_dataset = PythonOperator(
     task_id='download_dataset',
     python_callable=download_dataset_task,
+    execution_timeout=timedelta(minutes=30),
     dag=dag,
 )
 
