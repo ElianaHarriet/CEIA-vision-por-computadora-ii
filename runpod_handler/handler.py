@@ -4,6 +4,7 @@ Reuses the trainer/config/mlflow code from airflow/dags/training as-is
 (COPY'd into /app/training at build time), so training logic stays in one
 place instead of being duplicated between Airflow and this handler.
 """
+import os
 import sys
 import re
 from pathlib import Path
@@ -92,6 +93,13 @@ def handler(event):
     """RunPod entrypoint: dispatch to the right trainer based on model_type."""
     job_input = event["input"]
     model_type = job_input["model_type"]
+
+    # MLflow's own S3 artifact client (used by mlflow.log_artifact) reads this
+    # var directly; without it, it defaults to real AWS S3 instead of the
+    # tunneled MinIO, and fails with InvalidAccessKeyId (MinIO creds aren't
+    # valid AWS creds).
+    os.environ["MLFLOW_S3_ENDPOINT_URL"] = job_input["s3_endpoint_url"]
+
     mlflow_mgr = MLflowManager(job_input["mlflow_uri"], job_input["experiment_name"])
 
     if model_type == "yolo":
