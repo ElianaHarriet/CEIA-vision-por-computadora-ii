@@ -36,9 +36,14 @@ jobs:
 
       - name: Build and push
         run: |
+          # Tag with the commit SHA in addition to `latest`: RunPod workers
+          # cache the image locally by tag and don't reliably re-pull `latest`
+          # on every job, so a SHA-pinned tag is the only way to guarantee a
+          # worker actually runs the code from this build.
           docker buildx build \
             --platform linux/amd64 \
             --file runpod_handler/Dockerfile \
             --tag ${{ secrets.DOCKERHUB_USERNAME }}/runpod-training-handler:latest \
+            --tag ${{ secrets.DOCKERHUB_USERNAME }}/runpod-training-handler:${{ github.sha }} \
             --push \
             .
