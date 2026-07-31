@@ -56,6 +56,12 @@ MODEL_STAGE = EvaluationConfig.get_model_stage()
 RESULTS_PATH = EvaluationConfig.get_results_path()
 
 
+def _cache_path(context, name: str) -> str:
+    """Build a per-run path to stash large intermediate data on disk."""
+    run_id = context['run_id'].replace(':', '_').replace('+', '_')
+    return f"{RESULTS_PATH}/xcom_cache/{run_id}/{name}.pkl"
+
+
 def check_models_availability(**context):
     """Verificar que los modelos entrenados estén disponibles."""
     from evaluation.model_loader import YOLOModelLoader, UNetModelLoader
@@ -82,11 +88,13 @@ def check_models_availability(**context):
 def load_test_dataset(**context):
     """Cargar dataset de test."""
     from evaluation.dataset_loader import TestDatasetLoader
+    from evaluation.xcom_data import save_pickle
     loader = TestDatasetLoader(INSTANCE_PATH, SEMANTIC_PATH)
     test_images = loader.load_test_images()
     gt_masks = loader.load_ground_truth_masks(list(test_images.keys()))
+    gt_masks_path = save_pickle(gt_masks, _cache_path(context, 'gt_masks'))
     context['ti'].xcom_push(key='test_images', value=test_images)
-    context['ti'].xcom_push(key='gt_masks', value=gt_masks)
+    context['ti'].xcom_push(key='gt_masks_path', value=gt_masks_path)
     return {
         'test_images_count': len(test_images),
         'gt_masks_count': len(gt_masks)
@@ -97,6 +105,7 @@ def predict_instance_model(**context):
     """Hacer predicciones con modelo instance (YOLOv8-seg)."""
     from evaluation.model_loader import YOLOModelLoader
     from evaluation.predictor import YOLOPredictor
+    from evaluation.xcom_data import save_pickle
     test_images = context['ti'].xcom_pull(
         task_ids='load_test_dataset',
         key='test_images'
@@ -105,7 +114,12 @@ def predict_instance_model(**context):
     model = yolo_loader.load_yolo_model(INSTANCE_MODEL, MODEL_STAGE)
     predictor = YOLOPredictor(model)
     predictions = predictor.predict(test_images)
-    context['ti'].xcom_push(key='instance_predictions', value=predictions)
+    predictions_path = save_pickle(
+        predictions, _cache_path(context, 'instance_predictions')
+    )
+    context['ti'].xcom_push(
+        key='instance_predictions_path', value=predictions_path
+    )
     return {'predictions_count': len(predictions)}
 
 
@@ -113,6 +127,7 @@ def predict_semantic_model(**context):
     """Hacer predicciones con modelo semantic (U-Net)."""
     from evaluation.model_loader import UNetModelLoader
     from evaluation.predictor import UNetPredictor
+    from evaluation.xcom_data import save_pickle
     test_images = context['ti'].xcom_pull(
         task_ids='load_test_dataset',
         key='test_images'
@@ -124,38 +139,51 @@ def predict_semantic_model(**context):
     )
     predictor = UNetPredictor(model, device, (640, 640))
     predictions = predictor.predict(test_images)
-    context['ti'].xcom_push(key='semantic_predictions', value=predictions)
+    predictions_path = save_pickle(
+        predictions, _cache_path(context, 'semantic_predictions')
+    )
+    context['ti'].xcom_push(
+        key='semantic_predictions_path', value=predictions_path
+    )
     return {'predictions_count': len(predictions)}
 
 
 def flatten_instance_masks(**context):
     """Aplanar máscaras del modelo instance."""
     from evaluation.mask_flattener import MaskFlattener
-    predictions = context['ti'].xcom_pull(
+    from evaluation.xcom_data import save_pickle, load_pickle
+    predictions_path = context['ti'].xcom_pull(
         task_ids='predict_instance_model',
-        key='instance_predictions'
+        key='instance_predictions_path'
     )
+    predictions = load_pickle(predictions_path)
     flattener = MaskFlattener(strategy='or')
     flattened = flattener.flatten_predictions(predictions)
-    context['ti'].xcom_push(key='flattened_predictions', value=flattened)
+    flattened_path = save_pickle(
+        flattened, _cache_path(context, 'flattened_predictions')
+    )
+    context['ti'].xcom_push(
+        key='flattened_predictions_path', value=flattened_path
+    )
     return {'flattened_count': len(flattened)}
 
 
 def calculate_metrics(**context):
     """Calcular métricas de evaluación para ambos modelos."""
     from evaluation.metrics_calculator import MetricsCalculator, ComparisonCalculator
-    gt_masks = context['ti'].xcom_pull(
+    from evaluation.xcom_data import load_pickle
+    gt_masks = load_pickle(context['ti'].xcom_pull(
         task_ids='load_test_dataset',
-        key='gt_masks'
-    )
-    instance_preds = context['ti'].xcom_pull(
+        key='gt_masks_path'
+    ))
+    instance_preds = load_pickle(context['ti'].xcom_pull(
         task_ids='flatten_instance_masks',
-        key='flattened_predictions'
-    )
-    semantic_preds = context['ti'].xcom_pull(
+        key='flattened_predictions_path'
+    ))
+    semantic_preds = load_pickle(context['ti'].xcom_pull(
         task_ids='predict_semantic_model',
-        key='semantic_predictions'
-    )
+        key='semantic_predictions_path'
+    ))
     calculator = MetricsCalculator(EvaluationConfig.NUM_CLASSES)
     metrics_instance = calculator.calculate_all_metrics(
         instance_preds,
@@ -185,6 +213,7 @@ def calculate_metrics(**context):
 def generate_visualizations(**context):
     """Generar visualizaciones de comparación."""
     from evaluation.visualizer import ComparisonVisualizer
+    from evaluation.xcom_data import load_pickle
     all_metrics = context['ti'].xcom_pull(
         task_ids='calculate_metrics',
         key='all_metrics'
@@ -193,18 +222,18 @@ def generate_visualizations(**context):
         task_ids='load_test_dataset',
         key='test_images'
     )
-    gt_masks = context['ti'].xcom_pull(
+    gt_masks = load_pickle(context['ti'].xcom_pull(
         task_ids='load_test_dataset',
-        key='gt_masks'
-    )
-    instance_preds = context['ti'].xcom_pull(
+        key='gt_masks_path'
+    ))
+    instance_preds = load_pickle(context['ti'].xcom_pull(
         task_ids='flatten_instance_masks',
-        key='flattened_predictions'
-    )
-    semantic_preds = context['ti'].xcom_pull(
+        key='flattened_predictions_path'
+    ))
+    semantic_preds = load_pickle(context['ti'].xcom_pull(
         task_ids='predict_semantic_model',
-        key='semantic_predictions'
-    )
+        key='semantic_predictions_path'
+    ))
     samples = _prepare_samples(
         test_images,
         gt_masks,
@@ -327,7 +356,16 @@ def log_comparison_to_mlflow(**context):
         mlflow.log_param('hypothesis_validated', hypothesis['validated'])
         run_id = mlflow.active_run().info.run_id
     print(f"✓ Logged to MLflow (Run ID: {run_id})")
+    _cleanup_xcom_cache(context)
     return {'mlflow_run_id': run_id}
+
+
+def _cleanup_xcom_cache(context):
+    """Remove the pickled intermediate data for this DAG run."""
+    import shutil
+    run_id = context['run_id'].replace(':', '_').replace('+', '_')
+    cache_dir = Path(RESULTS_PATH) / 'xcom_cache' / run_id
+    shutil.rmtree(cache_dir, ignore_errors=True)
 
 
 def _log_metrics_to_mlflow(all_metrics):
