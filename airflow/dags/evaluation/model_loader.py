@@ -52,10 +52,10 @@ class UNetModelLoader(ModelLoader):
         version = self.check_model_availability(model_name, stage)
         model_uri = f"models:/{model_name}/{stage}"
         print(f"Loading U-Net from: {model_uri}")
-        model = mlflow.pytorch.load_model(model_uri)
         device = torch.device(
             'cuda' if torch.cuda.is_available() else 'cpu'
         )
+        model = mlflow.pytorch.load_model(model_uri, map_location=device)
         model = model.to(device)
         model.eval()
         return model, device
