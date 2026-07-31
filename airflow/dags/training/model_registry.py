@@ -18,6 +18,7 @@ class ModelRegistry:
         model_uri = self._build_uri(run_id)
         version = self._register(model_uri, model_name)
         self._update_description(model_name, version, desc)
+        self._transition_to_production(model_name, version)
         return self._get_result(model_name, version)
 
     def _build_uri(self, run_id: str):
@@ -44,12 +45,27 @@ class ModelRegistry:
             description=desc
         )
 
+    def _transition_to_production(self, name: str, version: int):
+        """Promote this version to Production, archiving prior ones.
+
+        evaluation_comparison_dag looks up models by stage
+        ("Production" by default), so a version that never leaves
+        stage "None" is invisible to it.
+        """
+        client = mlflow.MlflowClient()
+        client.transition_model_version_stage(
+            name=name,
+            version=version,
+            stage="Production",
+            archive_existing_versions=True
+        )
+
     def _get_result(self, name: str, version: int):
         """Get registration result."""
         return {
             "model_name": name,
             "version": version,
-            "stage": "None"
+            "stage": "Production"
         }
 
 
@@ -62,4 +78,5 @@ class YOLOModelRegistry(ModelRegistry):
         model_uri = f"runs:/{run_id}/model/best.pt"
         version = self._register(model_uri, model_name)
         self._update_description(model_name, version, desc)
+        self._transition_to_production(model_name, version)
         return self._get_result(model_name, version)
