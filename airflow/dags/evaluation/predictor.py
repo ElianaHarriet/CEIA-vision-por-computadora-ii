@@ -26,7 +26,9 @@ class YOLOPredictor:
 
     def _predict_single(self, image_path: str):
         """Predict single image."""
-        results = self.model.predict(image_path, verbose=False)
+        results = self.model.predict(
+            image_path, verbose=False, retina_masks=True
+        )
         return self._extract_masks(results[0])
 
     def _extract_masks(self, result):
