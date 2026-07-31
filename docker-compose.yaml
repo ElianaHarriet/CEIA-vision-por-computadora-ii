@@ -204,6 +204,21 @@ services:
       timeout: 10s
       retries: 3
 
+  # Los contenedores de cloudflared corren como uid 65532 (no-root, imagen
+  # distroless), pero un volumen nombrado nuevo se crea con dueño root:root -
+  # sin permiso de escritura para ese uid. Sin este init, cloudflared falla en
+  # silencio al intentar crear el logfile (no loguea ningún error) y
+  # tunnel_url.py revienta con FileNotFoundError del lado de Airflow.
+  cloudflared-logs-init:
+    image: busybox:latest
+    container_name: cloudflared-logs-init
+    profiles:
+      - airflow
+      - all
+    command: chown -R 65532:65532 /var/log/cloudflared
+    volumes:
+      - cloudflared_logs:/var/log/cloudflared
+
   # Cloudflare Quick Tunnels: exponen MLflow y MinIO públicamente para que el
   # endpoint de RunPod (fuera de la red de docker-compose) pueda escribir
   # métricas/artefactos y leer el dataset. La URL (*.trycloudflare.com) es
@@ -218,7 +233,10 @@ services:
       - all
     command: tunnel --url http://mlflow:5000 --logfile /var/log/cloudflared/mlflow.log
     depends_on:
-      - mlflow
+      mlflow:
+        condition: service_started
+      cloudflared-logs-init:
+        condition: service_completed_successfully
     networks:
       - backend
     volumes:
@@ -233,7 +251,10 @@ services:
       - all
     command: tunnel --url http://s3:9000 --logfile /var/log/cloudflared/s3.log
     depends_on:
-      - s3
+      s3:
+        condition: service_started
+      cloudflared-logs-init:
+        condition: service_completed_successfully
     networks:
       - backend
     volumes:
