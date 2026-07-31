@@ -62,7 +62,10 @@ class UNetConfig:
 
     ENCODER = "resnet34"
     ENCODER_WEIGHTS = "imagenet"
-    NUM_CLASSES = 4
+    # Mask pixel values are 0 (background, unlabeled) plus one index per
+    # entry in CLASS_NAMES (data_preparation_semantic_dag.py) — 4 damage
+    # classes + background = 5 distinct values, not 4.
+    NUM_CLASSES = 5
     EPOCHS = 100
     BATCH_SIZE = 16
     LEARNING_RATE = 1e-4
