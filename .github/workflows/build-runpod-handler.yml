@@ -1,0 +1,49 @@
+name: Build and push runpod_handler image
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag para la imagen (además de 'latest')"
+        required: false
+        default: "latest"
+  push:
+    branches:
+      - ci/runpod-docker-build
+    paths:
+      - "runpod_handler/**"
+      - "airflow/dags/training/**"
+      - ".github/workflows/build-runpod-handler.yml"
+
+jobs:
+  build-push:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+          sudo docker image prune -a -f
+          df -h /
+
+      - uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build and push
+        run: |
+          # Tag with the commit SHA in addition to `latest`: RunPod workers
+          # cache the image locally by tag and don't reliably re-pull `latest`
+          # on every job, so a SHA-pinned tag is the only way to guarantee a
+          # worker actually runs the code from this build.
+          docker buildx build \
+            --platform linux/amd64 \
+            --file runpod_handler/Dockerfile \
+            --tag ${{ secrets.DOCKERHUB_USERNAME }}/runpod-training-handler:latest \
+            --tag ${{ secrets.DOCKERHUB_USERNAME }}/runpod-training-handler:${{ github.sha }} \
+            --push \
+            .

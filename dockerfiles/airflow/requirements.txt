@@ -5,12 +5,11 @@ Pillow~=10.0
 psycopg2-binary~=2.9
 
 # ML Training Libraries
+# torch/torchvision se instalan aparte (CPU-only, ver Dockerfile) porque el
+# training real corre en RunPod; acá solo se usan para la validación local
+# de YOLO en CPU.
 ultralytics>=8.0.0
-torch>=2.0.0
-torchvision>=0.15.0
 opencv-python-headless>=4.8.0
-segmentation-models-pytorch>=0.3.3
-albumentations>=1.3.0
 tqdm>=4.65.0
 
 # Evaluation Libraries

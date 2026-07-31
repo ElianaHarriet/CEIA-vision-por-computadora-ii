@@ -1,13 +1,15 @@
 """
 DAG para entrenamiento del modelo de INSTANCE SEGMENTATION (YOLOv8-seg).
 
-Este DAG entrena un modelo YOLOv8-seg usando los datos preparados
-en formato instance y registra el experimento en MLflow.
+Este DAG sube el dataset a MinIO, dispara el entrenamiento en un endpoint de
+RunPod Serverless (GPU remota) y registra el experimento resultante en MLflow.
+La validación del modelo entrenado sigue corriendo localmente en CPU.
 
 Dataset: car-damages-ready/instance/
 Arquitectura: YOLOv8-seg
 Output: Modelo entrenado + métricas en MLflow
 """
+import os
 import sys
 from pathlib import Path
 from datetime import datetime, timedelta
@@ -49,37 +51,86 @@ MLFLOW_URI = TrainingConfig.get_mlflow_uri()
 EXPERIMENT_NAME = TrainingConfig.get_experiment_name()
 MODEL_NAME = TrainingConfig.get_instance_model_name()
 
+# RunPod / dataset upload configuration
+DATA_BUCKET = os.getenv("DATA_REPO_BUCKET_NAME", "data")
+DATASET_S3_PREFIX = "instance"
+DATA_YAML_RELPATH = "data.yaml"
+RUNPOD_ENDPOINT_ID = os.getenv("RUNPOD_ENDPOINT_ID")
+MLFLOW_TUNNEL_LOG = "/var/log/cloudflared/mlflow.log"
+S3_TUNNEL_LOG = "/var/log/cloudflared/s3.log"
+LOCAL_MODEL_DOWNLOAD_DIR = "/opt/airflow/runs/segment/car_damage_instance/weights"
+
+
 def check_data_availability(**context):
     """Verificar que los datos de instance/ estén disponibles."""
     validator = InstanceDataValidator(DATA_PATH)
     return validator.validate()
 
 
+def upload_dataset_to_s3(**context):
+    """Subir el dataset de instance/ a MinIO para que RunPod pueda descargarlo."""
+    from training.s3_sync import upload_dir_to_s3
+    upload_dir_to_s3(DATA_PATH, DATA_BUCKET, DATASET_S3_PREFIX)
+
+
 def setup_training_environment(**context):
-    """Configurar entorno de entrenamiento."""
-    from training.environment import YOLOEnvironment
-    env_setup = YOLOEnvironment(MLFLOW_URI, EXPERIMENT_NAME)
-    return env_setup.setup()
+    """Validar que RunPod esté configurado (ya no hay GPU local que chequear)."""
+    import mlflow
+    from airflow.models import Variable
+    if not RUNPOD_ENDPOINT_ID:
+        raise ValueError("RUNPOD_ENDPOINT_ID no está configurado en .env")
+    Variable.get("RUNPOD_API_KEY")  # smoke test: falla si no está en secrets
+    mlflow.set_tracking_uri(MLFLOW_URI)
+    mlflow.set_experiment(EXPERIMENT_NAME)
+    print(f"✓ RunPod endpoint configurado: {RUNPOD_ENDPOINT_ID}")
+    print(f"✓ MLflow: {MLFLOW_URI}")
+    return {"runpod_endpoint_id": RUNPOD_ENDPOINT_ID}
 
 
 def train_yolov8_model(**context):
-    """Entrenar modelo YOLOv8-seg."""
-    from training.mlflow_manager import MLflowManager
-    from training.yolo_trainer import YOLOTrainer
-    mlflow_mgr = MLflowManager(MLFLOW_URI, EXPERIMENT_NAME)
-    with mlflow_mgr.start_run("yolov8-seg-instance") as run:
-        run_id = run.info.run_id
-        print(f"MLflow Run ID: {run_id}")
-        trainer = YOLOTrainer(YOLOConfig, mlflow_mgr)
-        results = trainer.train(DATA_YAML)
-        trainer.log_artifacts()
-        context['ti'].xcom_push(key='run_id', value=run_id)
-        context['ti'].xcom_push(key='model_path', value=results['model_path'])
-        return {
-            "run_id": run_id,
-            "model_path": results['model_path'],
-            "metrics": results['metrics']
-        }
+    """Entrenar YOLOv8-seg en RunPod y traer el modelo resultante a disco local."""
+    import mlflow
+    from training.runpod_client import RunPodClient
+    from training.tunnel_url import get_quick_tunnel_url
+
+    mlflow_public_uri = get_quick_tunnel_url(MLFLOW_TUNNEL_LOG)
+    s3_public_uri = get_quick_tunnel_url(S3_TUNNEL_LOG)
+
+    payload = {
+        "model_type": "yolo",
+        "dataset_s3_prefix": DATASET_S3_PREFIX,
+        "dataset_bucket": DATA_BUCKET,
+        "data_yaml_relpath": DATA_YAML_RELPATH,
+        "s3_endpoint_url": s3_public_uri,
+        "mlflow_uri": mlflow_public_uri,
+        "experiment_name": EXPERIMENT_NAME,
+        "run_name_prefix": "yolov8-seg-instance",
+        "config_overrides": {},
+    }
+
+    client = RunPodClient(RUNPOD_ENDPOINT_ID)
+    job_id = client.submit_job(payload)
+    result = client.poll_job(job_id)
+    run_id = result['run_id']
+    print(f"MLflow Run ID: {run_id}")
+
+    # El modelo se entrenó en RunPod; bajarlo de MLflow para poder validarlo
+    # localmente en CPU en la siguiente task.
+    mlflow.set_tracking_uri(MLFLOW_URI)
+    Path(LOCAL_MODEL_DOWNLOAD_DIR).mkdir(parents=True, exist_ok=True)
+    local_model_path = mlflow.artifacts.download_artifacts(
+        run_id=run_id,
+        artifact_path="model/best.pt",
+        dst_path=LOCAL_MODEL_DOWNLOAD_DIR,
+    )
+
+    context['ti'].xcom_push(key='run_id', value=run_id)
+    context['ti'].xcom_push(key='model_path', value=local_model_path)
+    return {
+        "run_id": run_id,
+        "model_path": local_model_path,
+        "metrics": result.get('metrics'),
+    }
 
 
 def register_model_in_registry(**context):
@@ -127,6 +178,12 @@ check_data = PythonOperator(
     dag=dag,
 )
 
+upload_dataset = PythonOperator(
+    task_id='upload_dataset_to_s3',
+    python_callable=upload_dataset_to_s3,
+    dag=dag,
+)
+
 setup_env = PythonOperator(
     task_id='setup_training_environment',
     python_callable=setup_training_environment,
@@ -152,4 +209,4 @@ validate_model = PythonOperator(
 )
 
 # Define dependencies
-check_data >> setup_env >> train_model >> register_model >> validate_model
+check_data >> upload_dataset >> setup_env >> train_model >> register_model >> validate_model

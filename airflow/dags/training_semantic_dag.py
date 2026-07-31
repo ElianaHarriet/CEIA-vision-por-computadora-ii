@@ -1,13 +1,14 @@
 """
 DAG para entrenamiento del modelo de SEMANTIC SEGMENTATION (U-Net).
 
-Este DAG entrena un modelo U-Net usando los datos preparados
-en formato semantic y registra el experimento en MLflow.
+Este DAG sube el dataset a MinIO, dispara el entrenamiento en un endpoint de
+RunPod Serverless (GPU remota) y registra el experimento resultante en MLflow.
 
 Dataset: car-damages-ready/semantic/
 Arquitectura: U-Net con encoder ResNet34
 Output: Modelo entrenado + métricas en MLflow
 """
+import os
 import sys
 from pathlib import Path
 from datetime import datetime, timedelta
@@ -48,6 +49,13 @@ MLFLOW_URI = TrainingConfig.get_mlflow_uri()
 EXPERIMENT_NAME = TrainingConfig.get_experiment_name()
 MODEL_NAME = TrainingConfig.get_semantic_model_name()
 
+# RunPod / dataset upload configuration
+DATA_BUCKET = os.getenv("DATA_REPO_BUCKET_NAME", "data")
+DATASET_S3_PREFIX = "semantic"
+RUNPOD_ENDPOINT_ID = os.getenv("RUNPOD_ENDPOINT_ID")
+MLFLOW_TUNNEL_LOG = "/var/log/cloudflared/mlflow.log"
+S3_TUNNEL_LOG = "/var/log/cloudflared/s3.log"
+
 
 def check_data_availability(**context):
     """Verificar que los datos de semantic/ estén disponibles."""
@@ -55,15 +63,33 @@ def check_data_availability(**context):
     return validator.validate()
 
 
+def upload_dataset_to_s3(**context):
+    """Subir el dataset de semantic/ a MinIO para que RunPod pueda descargarlo."""
+    from training.s3_sync import upload_dir_to_s3
+    upload_dir_to_s3(DATA_PATH, DATA_BUCKET, DATASET_S3_PREFIX)
+
+
 def setup_training_environment(**context):
-    """Configurar entorno de entrenamiento."""
-    from training.environment import UNetEnvironment
-    env_setup = UNetEnvironment(MLFLOW_URI, EXPERIMENT_NAME)
-    return env_setup.setup()
+    """Validar que RunPod esté configurado (ya no hay GPU local que chequear)."""
+    import mlflow
+    from airflow.models import Variable
+    if not RUNPOD_ENDPOINT_ID:
+        raise ValueError("RUNPOD_ENDPOINT_ID no está configurado en .env")
+    Variable.get("RUNPOD_API_KEY")  # smoke test: falla si no está en secrets
+    mlflow.set_tracking_uri(MLFLOW_URI)
+    mlflow.set_experiment(EXPERIMENT_NAME)
+    print(f"✓ RunPod endpoint configurado: {RUNPOD_ENDPOINT_ID}")
+    print(f"✓ MLflow: {MLFLOW_URI}")
+    return {"runpod_endpoint_id": RUNPOD_ENDPOINT_ID}
 
 
 def create_dataloaders(**context):
-    """Crear DataLoaders para train, valid, test."""
+    """Validar que el dataset carga bien y publicar sus tamaños por XCom.
+
+    El training real corre en RunPod (train_unet_model no reconstruye estos
+    DataLoaders); esta task es solo un chequeo temprano de que el dataset
+    está bien formado antes de subirlo y disparar un job de GPU remota.
+    """
     from training.dataloader_factory import DataLoaderFactory
     factory = DataLoaderFactory(
         DATA_PATH,
@@ -77,37 +103,40 @@ def create_dataloaders(**context):
         'test': len(test_loader.dataset)
     }
     context['ti'].xcom_push(key='dataset_sizes', value=sizes)
-    return {
-        'train_loader': train_loader,
-        'valid_loader': valid_loader,
-        'test_loader': test_loader
-    }
+    return sizes
 
 
 def train_unet_model(**context):
-    """Entrenar modelo U-Net."""
-    from training.dataloader_factory import DataLoaderFactory
-    from training.mlflow_manager import MLflowManager
-    from training.unet_trainer import UNetTrainer
-    factory = DataLoaderFactory(
-        DATA_PATH,
-        UNetConfig.IMG_SIZE,
-        UNetConfig.BATCH_SIZE
+    """Entrenar U-Net en RunPod y esperar el resultado."""
+    from training.runpod_client import RunPodClient
+    from training.tunnel_url import get_quick_tunnel_url
+
+    mlflow_public_uri = get_quick_tunnel_url(MLFLOW_TUNNEL_LOG)
+    s3_public_uri = get_quick_tunnel_url(S3_TUNNEL_LOG)
+
+    payload = {
+        "model_type": "unet",
+        "dataset_s3_prefix": DATASET_S3_PREFIX,
+        "dataset_bucket": DATA_BUCKET,
+        "s3_endpoint_url": s3_public_uri,
+        "mlflow_uri": mlflow_public_uri,
+        "experiment_name": EXPERIMENT_NAME,
+        "run_name_prefix": "unet",
+        "config_overrides": {},
+    }
+
+    client = RunPodClient(RUNPOD_ENDPOINT_ID)
+    job_id = client.submit_job(payload)
+    result = client.poll_job(job_id)
+    run_id = result['run_id']
+    print(f"MLflow Run ID: {run_id}")
+
+    context['ti'].xcom_push(key='run_id', value=run_id)
+    context['ti'].xcom_push(
+        key='best_val_loss',
+        value=result['best_val_loss']
     )
-    train_loader, valid_loader, _ = factory.create_loaders()
-    mlflow_mgr = MLflowManager(MLFLOW_URI, EXPERIMENT_NAME)
-    with mlflow_mgr.start_run("unet") as run:
-        run_id = run.info.run_id
-        print(f"MLflow Run ID: {run_id}")
-        trainer = UNetTrainer(UNetConfig, mlflow_mgr)
-        results = trainer.train(train_loader, valid_loader)
-        trainer.save_model()
-        context['ti'].xcom_push(key='run_id', value=run_id)
-        context['ti'].xcom_push(
-            key='best_val_loss',
-            value=results['best_val_loss']
-        )
-        return {"run_id": run_id, "best_val_loss": results['best_val_loss']}
+    return {"run_id": run_id, "best_val_loss": result['best_val_loss']}
 
 
 def register_model_in_registry(**context):
@@ -142,6 +171,12 @@ check_data = PythonOperator(
     dag=dag,
 )
 
+upload_dataset = PythonOperator(
+    task_id='upload_dataset_to_s3',
+    python_callable=upload_dataset_to_s3,
+    dag=dag,
+)
+
 setup_env = PythonOperator(
     task_id='setup_training_environment',
     python_callable=setup_training_environment,
@@ -173,6 +208,6 @@ validate_model = PythonOperator(
 )
 
 # Define dependencies
-deps = [check_data, setup_env, prepare_loaders]
+deps = [check_data, upload_dataset, setup_env, prepare_loaders]
 deps += [train_model, register_model, validate_model]
-deps[0] >> deps[1] >> deps[2] >> deps[3] >> deps[4] >> deps[5]
+deps[0] >> deps[1] >> deps[2] >> deps[3] >> deps[4] >> deps[5] >> deps[6]

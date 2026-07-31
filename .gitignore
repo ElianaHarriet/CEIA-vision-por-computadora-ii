@@ -169,7 +169,8 @@ desktop.ini
 airflow/logs/
 airflow/config/
 airflow/plugins/
-airflow/secrets/
+airflow/secrets/*
+!airflow/secrets/variables.yaml.example
 
 # Datasets descargados
 car_damage_detection/
@@ -193,9 +194,11 @@ env/
 
 # Carpeta de secretos para compartir (no commitear)
 secrets-to-share/
+runpod_test_payload.json
 
 # Dot-directories (temporary, config, etc.)
 .*/
+!.github/
 
 # VSCode settings (opcional - comentar si el equipo quiere compartir settings)
 # .vscode/
