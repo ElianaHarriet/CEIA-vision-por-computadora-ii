@@ -10,6 +10,7 @@ on:
   push:
     branches:
       - ci/runpod-docker-build
+      - feat/multi-user-docker-workflow
     paths:
       - "runpod_handler/**"
       - "airflow/dags/training/**"
