@@ -34,14 +34,21 @@ class YOLOPredictor:
     def _extract_masks(self, result):
         """Extract masks from result."""
         if result.masks is None:
-            return {'masks': [], 'boxes': [], 'confidences': []}
+            return {
+                'masks': [],
+                'boxes': [],
+                'confidences': [],
+                'classes': []
+            }
         masks = result.masks.data.cpu().numpy()
         boxes = result.boxes.xyxy.cpu().numpy()
         confs = result.boxes.conf.cpu().numpy()
+        classes = result.boxes.cls.cpu().numpy()
         return {
             'masks': masks,
             'boxes': boxes,
-            'confidences': confs
+            'confidences': confs,
+            'classes': classes
         }
 
 

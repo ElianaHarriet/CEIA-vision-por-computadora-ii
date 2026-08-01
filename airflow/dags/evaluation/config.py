@@ -50,8 +50,9 @@ class EvaluationConfig:
         """Get path for evaluation results."""
         return "/opt/airflow/evaluation_results"
 
-    NUM_CLASSES = 4
+    NUM_CLASSES = 5
     CLASS_NAMES = [
+        "Background",
         "Minor Damage (Dent)",
         "Minor Damage (Scratch)",
         "No Damage",

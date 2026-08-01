@@ -16,7 +16,10 @@ class HypothesisValidator:
         conclusion = self._generate_conclusion(validated, evidence)
         result = {
             'validated': validated,
-            'evidence': evidence,
+            'evidence': evidence['summary'],
+            'p_value': evidence['p_value'],
+            'mean_iou_instance': evidence['iou_inst'],
+            'mean_iou_semantic': evidence['iou_sem'],
             'conclusion': conclusion
         }
         print(f"✓ Hypothesis {'validated' if validated else 'refuted'}")
@@ -28,20 +31,29 @@ class HypothesisValidator:
         sem_agg = metrics_sem['aggregated']
         iou_inst = inst_agg['mean_iou']
         iou_sem = sem_agg['mean_iou']
-        evidence = (
-            f"Instance IoU ({iou_inst:.4f}) vs "
-            f"Semantic IoU ({iou_sem:.4f}). "
-        )
-        if iou_inst > iou_sem:
-            evidence += "Instance model shows better performance."
-        else:
-            evidence += "Semantic model shows better performance."
         p_value = self._statistical_test(metrics_inst, metrics_sem)
-        if p_value < 0.05:
-            evidence += f" Difference is statistically significant (p={p_value:.4f})."
+        if iou_inst > iou_sem:
+            summary = (
+                f"Instance IoU ({iou_inst:.4f}) vs "
+                f"Semantic IoU ({iou_sem:.4f}). "
+                "Instance model shows better performance."
+            )
         else:
-            evidence += f" Difference is not significant (p={p_value:.4f})."
-        return evidence
+            summary = (
+                f"Instance IoU ({iou_inst:.4f}) vs "
+                f"Semantic IoU ({iou_sem:.4f}). "
+                "Semantic model shows better performance."
+            )
+        if p_value < 0.05:
+            summary += f" Difference is statistically significant (p={p_value:.4f})."
+        else:
+            summary += f" Difference is not significant (p={p_value:.4f})."
+        return {
+            'iou_inst': iou_inst,
+            'iou_sem': iou_sem,
+            'p_value': p_value,
+            'summary': summary
+        }
 
     def _statistical_test(self, metrics_inst, metrics_sem):
         """Perform statistical significance test."""
@@ -58,11 +70,19 @@ class HypothesisValidator:
         _, p_value = stats.ttest_ind(inst_ious, sem_ious)
         return float(p_value)
 
-    def _determine_validation(self, evidence: str):
-        """Determine if hypothesis is validated."""
-        return "better performance" in evidence.lower()
+    def _determine_validation(self, evidence: dict):
+        """Determine if hypothesis is validated.
 
-    def _generate_conclusion(self, validated: bool, evidence: str):
+        The hypothesis claims instance segmentation outperforms
+        semantic segmentation. It is validated only when the instance
+        mean IoU is actually higher AND the difference is statistically
+        significant (p < 0.05).
+        """
+        if evidence['iou_inst'] <= evidence['iou_sem']:
+            return False
+        return evidence['p_value'] < 0.05
+
+    def _generate_conclusion(self, validated: bool, evidence: dict):
         """Generate conclusion text."""
         if validated:
             return (
