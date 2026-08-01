@@ -8,7 +8,7 @@ class TrainingConfig:
     @staticmethod
     def get_data_path():
         """Get base data path."""
-        return "/opt/airflow/car_damage_detection/car-damages"
+        return "/opt/airflow/car_damage_detection/data"
 
     @staticmethod
     def get_instance_path():
