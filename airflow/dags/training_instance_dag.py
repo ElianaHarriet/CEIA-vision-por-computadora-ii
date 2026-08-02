@@ -96,12 +96,23 @@ def train_yolov8_model(**context):
     mlflow_public_uri = get_quick_tunnel_url(MLFLOW_TUNNEL_LOG)
     s3_public_uri = get_quick_tunnel_url(S3_TUNNEL_LOG)
 
+    # Get MinIO credentials from environment (required)
+    s3_access_key = os.getenv("MINIO_ACCESS_KEY")
+    s3_secret_key = os.getenv("MINIO_SECRET_ACCESS_KEY")
+    
+    if not s3_access_key or not s3_secret_key:
+        raise ValueError(
+            "MINIO_ACCESS_KEY and MINIO_SECRET_ACCESS_KEY must be set in .env"
+        )
+
     payload = {
         "model_type": "yolo",
         "dataset_s3_prefix": DATASET_S3_PREFIX,
         "dataset_bucket": DATA_BUCKET,
         "data_yaml_relpath": DATA_YAML_RELPATH,
         "s3_endpoint_url": s3_public_uri,
+        "s3_access_key": s3_access_key,
+        "s3_secret_key": s3_secret_key,
         "mlflow_uri": mlflow_public_uri,
         "experiment_name": EXPERIMENT_NAME,
         "run_name_prefix": "yolov8-seg-instance",

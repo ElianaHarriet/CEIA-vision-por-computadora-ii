@@ -49,7 +49,7 @@ class TrainingConfig:
 class YOLOConfig:
     """Configuration for YOLO training."""
 
-    MODEL = "yolov8s-seg.pt"
+    MODEL = "yolov8x-seg.pt"  # Extra Large - 72M params, mejor performance
     EPOCHS = 100
     IMG_SIZE = 640
     BATCH_SIZE = 16

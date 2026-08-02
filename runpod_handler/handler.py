@@ -47,6 +47,10 @@ def _rewrite_data_yaml(data_yaml_path: str, local_dataset_dir: str):
 
 def _train_yolo(job_input: dict, mlflow_mgr: MLflowManager) -> dict:
     """Download dataset, train YOLOv8-seg, log to MLflow, return results."""
+    # Set S3 credentials from job input
+    os.environ["AWS_ACCESS_KEY_ID"] = job_input["s3_access_key"]
+    os.environ["AWS_SECRET_ACCESS_KEY"] = job_input["s3_secret_key"]
+    
     download_dataset(
         job_input["s3_endpoint_url"],
         job_input.get("dataset_bucket", "data"),
@@ -71,6 +75,10 @@ def _train_yolo(job_input: dict, mlflow_mgr: MLflowManager) -> dict:
 
 def _train_unet(job_input: dict, mlflow_mgr: MLflowManager) -> dict:
     """Download dataset, train U-Net, log to MLflow, return results."""
+    # Set S3 credentials from job input
+    os.environ["AWS_ACCESS_KEY_ID"] = job_input["s3_access_key"]
+    os.environ["AWS_SECRET_ACCESS_KEY"] = job_input["s3_secret_key"]
+    
     download_dataset(
         job_input["s3_endpoint_url"],
         job_input.get("dataset_bucket", "data"),
