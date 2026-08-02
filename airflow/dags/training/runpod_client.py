@@ -1,10 +1,12 @@
 """Client for RunPod Serverless Endpoints."""
+import os
 import time
 import requests
 from airflow.exceptions import AirflowException
 from airflow.models import Variable
 
 RUNPOD_API_BASE = "https://api.runpod.ai/v2"
+RUNPOD_GRAPHQL_URL = "https://api.runpod.io/graphql"
 
 TERMINAL_FAILURE_STATUSES = {"FAILED", "CANCELLED", "TIMED_OUT"}
 
@@ -30,6 +32,56 @@ class RunPodClient:
             "Content-Type": "application/json",
         }
 
+    def get_balance(self) -> dict:
+        """Query the account credit balance via the GraphQL ``myself`` query.
+
+        ``clientBalance`` is the current prepaid credit balance in USD;
+        ``currentSpendPerHr`` is the instantaneous spend rate. This is the
+        same query the ``runpodctl user`` command uses.
+        """
+        query = """
+            query myself {
+                myself {
+                    clientBalance
+                    currentSpendPerHr
+                    creditAlertThreshold
+                }
+            }
+        """
+        response = requests.post(
+            RUNPOD_GRAPHQL_URL,
+            json={"query": query},
+            headers=self._headers(),
+            timeout=30,
+        )
+        response.raise_for_status()
+        data = response.json()
+        if "errors" in data:
+            raise RuntimeError(
+                f"RunPod balance query failed: {data['errors']}"
+            )
+        return data["data"]["myself"]
+
+    def check_balance(self, min_balance: float = None) -> float:
+        """Fail early if the RunPod credit balance is too low.
+
+        Returns the current credit balance. Threshold defaults to
+        ``RUNPOD_MIN_BALANCE`` (10 USD) and can be overridden per call.
+        """
+        threshold = min_balance if min_balance is not None else float(
+            os.getenv("RUNPOD_MIN_BALANCE", "10")
+        )
+        balance = self.get_balance()
+        client_balance = float(balance.get("clientBalance", 0))
+        print(f"RunPod balance: ${client_balance:.2f} "
+              f"(threshold: ${threshold:.2f})")
+        if client_balance < threshold:
+            raise ValueError(
+                f"RunPod balance insuficiente: ${client_balance:.2f} "
+                f"< ${threshold:.2f}. No se dispara el training."
+            )
+        return client_balance
+
     def submit_job(self, payload: dict) -> str:
         """Submit a job to the endpoint and return its job_id."""
         url = f"{RUNPOD_API_BASE}/{self.endpoint_id}/run"
@@ -48,11 +100,22 @@ class RunPodClient:
         response.raise_for_status()
         return response.json()
 
+    def cancel_job(self, job_id: str) -> dict:
+        """Cancel a running job so it stops billing."""
+        url = f"{RUNPOD_API_BASE}/{self.endpoint_id}/cancel/{job_id}"
+        response = requests.post(
+            url, headers=self._headers(), timeout=30
+        )
+        response.raise_for_status()
+        print(f"✗ RunPod job {job_id} cancelled")
+        return response.json()
+
     def poll_job(self, job_id: str, timeout_s: int = 10800, interval_s: int = 45) -> dict:
         """Poll a job until it reaches a terminal state.
 
         Raises AirflowException on FAILED/CANCELLED/TIMED_OUT or if the
-        polling loop itself exceeds timeout_s.
+        polling loop itself exceeds timeout_s. The job is cancelled before
+        raising, so a timed-out run stops billing immediately.
         """
         elapsed = 0
         while elapsed < timeout_s:
@@ -62,12 +125,29 @@ class RunPodClient:
             if status == "COMPLETED":
                 return status_data.get("output", {})
             if status in TERMINAL_FAILURE_STATUSES:
+                self._cancel_best_effort(job_id, status, status_data)
                 raise AirflowException(
                     f"RunPod job {job_id} ended with status {status}: "
                     f"{status_data.get('error')}"
                 )
             time.sleep(interval_s)
             elapsed += interval_s
+        self._cancel_best_effort(job_id, "TIMEOUT", {})
         raise AirflowException(
             f"RunPod job {job_id} did not complete within {timeout_s}s"
         )
+
+    def _cancel_best_effort(self, job_id: str, status: str, status_data: dict):
+        """Cancel a non-completed job, swallowing API errors.
+
+        A job stuck in IN_QUEUE/IN_PROGRESS that hit the poll timeout would
+        otherwise keep billing until RunPod's own timeout kicks in. Retrying
+        the task would then submit a second job, doubling cost.
+        """
+        try:
+            self.cancel_job(job_id)
+        except Exception as exc:
+            print(
+                f"⚠ Could not cancel RunPod job {job_id} "
+                f"({status}): {exc}"
+            )
