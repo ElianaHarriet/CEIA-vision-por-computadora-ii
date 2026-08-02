@@ -204,6 +204,7 @@ setup_env = PythonOperator(
 train_model = PythonOperator(
     task_id='train_yolov8_model',
     python_callable=train_yolov8_model,
+    execution_timeout=timedelta(hours=4), 
     dag=dag,
 )
 
