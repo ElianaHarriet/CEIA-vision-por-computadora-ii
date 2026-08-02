@@ -24,15 +24,17 @@ jobs:
 
       - name: Configurar variables según el usuario
         run: |
+          echo "DEBUG: github.actor = ${{ github.actor }}"
           if [ "${{ github.actor }}" = "LuisAli22" ]; then
             echo "DOCKER_USERNAME=${{ secrets.DOCKERHUB_USERNAME_LUIS }}" >> $GITHUB_ENV
             echo "DOCKER_TOKEN=${{ secrets.DOCKERHUB_TOKEN_LUIS }}" >> $GITHUB_ENV
-            echo "✓ Usando credentials de Luis"
+            echo "✓ Usando credentials de Luis (username: ${{ secrets.DOCKERHUB_USERNAME_LUIS }})"
           else
             echo "DOCKER_USERNAME=${{ secrets.DOCKERHUB_USERNAME }}" >> $GITHUB_ENV
             echo "DOCKER_TOKEN=${{ secrets.DOCKERHUB_TOKEN }}" >> $GITHUB_ENV
             echo "✓ Usando credentials de Santiago (default)"
           fi
+          echo "DEBUG: DOCKER_USERNAME seteado"
 
       - name: Free disk space
         run: |
