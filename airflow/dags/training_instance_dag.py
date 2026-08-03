@@ -97,12 +97,13 @@ def train_yolov8_model(**context):
     s3_public_uri = get_quick_tunnel_url(S3_TUNNEL_LOG)
 
     # Get MinIO credentials from environment (required)
-    s3_access_key = os.getenv("MINIO_ACCESS_KEY")
-    s3_secret_key = os.getenv("MINIO_SECRET_ACCESS_KEY")
+    # Docker Compose maps these as AWS_* variables
+    s3_access_key = os.getenv("AWS_ACCESS_KEY_ID")
+    s3_secret_key = os.getenv("AWS_SECRET_ACCESS_KEY")
     
     if not s3_access_key or not s3_secret_key:
         raise ValueError(
-            "MINIO_ACCESS_KEY and MINIO_SECRET_ACCESS_KEY must be set in .env"
+            "AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY must be set (check docker-compose.yaml)"
         )
 
     payload = {
