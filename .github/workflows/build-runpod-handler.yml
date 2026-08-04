@@ -13,7 +13,6 @@ on:
       - feat/multi-user-docker-workflow
     paths:
       - "runpod_handler/**"
-      - "airflow/dags/training/**"
       - ".github/workflows/build-runpod-handler.yml"
 
 jobs:
