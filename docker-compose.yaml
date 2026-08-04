@@ -65,6 +65,7 @@ x-airflow-common: &airflow-common
     MODEL_VERSION_INSTANCE: ${MODEL_VERSION_INSTANCE:-latest}
     MODEL_VERSION_SEMANTIC: ${MODEL_VERSION_SEMANTIC:-latest}
     RUNPOD_ENDPOINT_ID: ${RUNPOD_ENDPOINT_ID:-}
+    RUNPOD_MIN_BALANCE: ${RUNPOD_MIN_BALANCE:-2}
   volumes:
     - ${AIRFLOW_PROJ_DIR:-./airflow}/dags:/opt/airflow/dags
     - ${AIRFLOW_PROJ_DIR:-./airflow}/logs:/opt/airflow/logs
