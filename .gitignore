@@ -172,6 +172,9 @@ airflow/plugins/
 airflow/secrets/*
 !airflow/secrets/variables.yaml.example
 
+# Salidas generadas por el DAG de evaluación (report + plots + cache)
+airflow/evaluation_results/
+
 # Datasets descargados
 car_damage_detection/
 
