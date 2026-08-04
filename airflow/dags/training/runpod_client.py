@@ -66,10 +66,10 @@ class RunPodClient:
         """Fail early if the RunPod credit balance is too low.
 
         Returns the current credit balance. Threshold defaults to
-        ``RUNPOD_MIN_BALANCE`` (10 USD) and can be overridden per call.
+        ``RUNPOD_MIN_BALANCE`` (2 USD) and can be overridden per call.
         """
         threshold = min_balance if min_balance is not None else float(
-            os.getenv("RUNPOD_MIN_BALANCE", "10")
+            os.getenv("RUNPOD_MIN_BALANCE", "2")
         )
         balance = self.get_balance()
         client_balance = float(balance.get("clientBalance", 0))
