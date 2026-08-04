@@ -10,9 +10,17 @@ from albumentations.pytorch import ToTensorV2
 class YOLOPredictor:
     """Predictor for YOLO models."""
 
-    def __init__(self, model):
-        """Initialize predictor."""
+    def __init__(self, model, conf: float = 0.4):
+        """Initialize predictor.
+
+        conf: minimum detection confidence. YOLO's default (0.25) lets
+        through low-confidence detections that produce giant spurious
+        masks, inflating the damage-area error. 0.4 removes those
+        outliers with a negligible recall cost (validated: mean relative
+        area error 2.27 -> 0.69, +6 missed detections out of 119 images).
+        """
         self.model = model
+        self.conf = conf
 
     def predict(self, image_paths: dict):
         """Predict on images."""
@@ -27,7 +35,7 @@ class YOLOPredictor:
     def _predict_single(self, image_path: str):
         """Predict single image."""
         results = self.model.predict(
-            image_path, verbose=False, retina_masks=True
+            image_path, verbose=False, retina_masks=True, conf=self.conf
         )
         return self._extract_masks(results[0])
 
