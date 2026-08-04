@@ -1,4 +1,5 @@
 """Predictors for evaluation."""
+import os
 import numpy as np
 import torch
 from PIL import Image
@@ -10,17 +11,12 @@ from albumentations.pytorch import ToTensorV2
 class YOLOPredictor:
     """Predictor for YOLO models."""
 
-    def __init__(self, model, conf: float = 0.4):
-        """Initialize predictor.
-
-        conf: minimum detection confidence. YOLO's default (0.25) lets
-        through low-confidence detections that produce giant spurious
-        masks, inflating the damage-area error. 0.4 removes those
-        outliers with a negligible recall cost (validated: mean relative
-        area error 2.27 -> 0.69, +6 missed detections out of 119 images).
-        """
+    def __init__(self, model, conf: float = None):
+        """Initialize predictor. ``conf`` defaults to the ``YOLO_CONF`` env var."""
         self.model = model
-        self.conf = conf
+        self.conf = conf if conf is not None else float(
+            os.getenv("YOLO_CONF", "0.4")
+        )
 
     def predict(self, image_paths: dict):
         """Predict on images."""
