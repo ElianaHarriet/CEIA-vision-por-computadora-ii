@@ -50,11 +50,11 @@ class YOLOConfig:
     """Configuration for YOLO training."""
 
     MODEL = "yolov8x-seg.pt"  # Extra Large - 72M params, mejor performance
-    EPOCHS = 100
+    EPOCHS = 150  # Aumentado de 100 para dar más tiempo de convergencia
     IMG_SIZE = 640
     BATCH_SIZE = 16
     DEVICE = 0
-    PATIENCE = 10
+    PATIENCE = 20  # Aumentado de 10 para dar más margen antes de early stopping
 
 
 class UNetConfig:
