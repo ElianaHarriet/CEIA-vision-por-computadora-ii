@@ -71,6 +71,7 @@ x-airflow-common: &airflow-common
     YOLO_IMG_SIZE: ${YOLO_IMG_SIZE:-640}
     YOLO_BATCH_SIZE: ${YOLO_BATCH_SIZE:-16}
     YOLO_PATIENCE: ${YOLO_PATIENCE:-10}
+    YOLO_CONF: ${YOLO_CONF:-0.4}
   volumes:
     - ${AIRFLOW_PROJ_DIR:-./airflow}/dags:/opt/airflow/dags
     - ${AIRFLOW_PROJ_DIR:-./airflow}/logs:/opt/airflow/logs
