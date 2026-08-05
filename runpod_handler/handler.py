@@ -3,6 +3,8 @@
 Reuses the trainer/config/mlflow code from airflow/dags/training as-is
 (COPY'd into /app/training at build time), so training logic stays in one
 place instead of being duplicated between Airflow and this handler.
+
+Version: 1.0.1 - Force rebuild to fix unhealthy workers
 """
 import os
 import sys
