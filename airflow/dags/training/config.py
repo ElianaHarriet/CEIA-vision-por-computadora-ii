@@ -47,14 +47,14 @@ class TrainingConfig:
 
 
 class YOLOConfig:
-    """Configuration for YOLO training."""
+    """Configuration for YOLO training (overridable via env vars)."""
 
-    MODEL = "yolov8s-seg.pt"
-    EPOCHS = 100
-    IMG_SIZE = 640
-    BATCH_SIZE = 16
+    MODEL = os.getenv("YOLO_MODEL", "yolov8s-seg.pt")
+    EPOCHS = int(os.getenv("YOLO_EPOCHS", "100"))
+    IMG_SIZE = int(os.getenv("YOLO_IMG_SIZE", "640"))
+    BATCH_SIZE = int(os.getenv("YOLO_BATCH_SIZE", "16"))
     DEVICE = 0
-    PATIENCE = 10
+    PATIENCE = int(os.getenv("YOLO_PATIENCE", "10"))
 
 
 class UNetConfig:

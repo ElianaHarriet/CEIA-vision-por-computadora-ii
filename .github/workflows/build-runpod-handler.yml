@@ -9,10 +9,21 @@ on:
         default: "latest"
   push:
     branches:
-      - ci/runpod-docker-build
+      - main
+      - feat/yolo-tuning-params
     paths:
+      # Estos son exactamente los archivos que runpod_handler/handler.py
+      # importa (directa o transitivamente) de airflow/dags/training/ y que
+      # por lo tanto terminan corriendo dentro del contenedor. Si el handler
+      # empieza a importar un archivo nuevo de esa carpeta, agregarlo acá a
+      # mano o el cambio no va a disparar un build.
       - "runpod_handler/**"
-      - "airflow/dags/training/**"
+      - "airflow/dags/training/config.py"
+      - "airflow/dags/training/mlflow_manager.py"
+      - "airflow/dags/training/yolo_trainer.py"
+      - "airflow/dags/training/unet_trainer.py"
+      - "airflow/dags/training/dataloader_factory.py"
+      - "airflow/dags/training/datasets.py"
       - ".github/workflows/build-runpod-handler.yml"
 
 jobs:
@@ -47,3 +58,18 @@ jobs:
             --tag ${{ secrets.DOCKERHUB_USERNAME }}/runpod-training-handler:${{ github.sha }} \
             --push \
             .
+
+      # Repunta el Container Image del template del endpoint al SHA recién
+      # pusheado, vía la GraphQL API de RunPod - reemplaza el paso manual de
+      # "actualizar el Container Image en la consola". IMPORTANTE: antes de
+      # confiar en este step, probar update_runpod_image.py a mano (dry-run
+      # y luego --apply) contra el endpoint real desde una terminal - ver
+      # .github/workflows/scripts/update_runpod_image.py.
+      - name: Point RunPod endpoint at the new image
+        env:
+          RUNPOD_API_KEY: ${{ secrets.RUNPOD_API_KEY }}
+          RUNPOD_ENDPOINT_ID: ${{ vars.RUNPOD_ENDPOINT_ID }}
+        run: |
+          python3 .github/workflows/scripts/update_runpod_image.py \
+            "${{ secrets.DOCKERHUB_USERNAME }}/runpod-training-handler:${{ github.sha }}" \
+            --apply
