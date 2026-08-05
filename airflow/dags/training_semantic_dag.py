@@ -116,6 +116,16 @@ def train_unet_model(**context):
     mlflow_public_uri = get_quick_tunnel_url(MLFLOW_TUNNEL_LOG)
     s3_public_uri = get_quick_tunnel_url(S3_TUNNEL_LOG)
 
+    config_overrides = {
+        "ENCODER": UNetConfig.ENCODER,
+        "ENCODER_WEIGHTS": UNetConfig.ENCODER_WEIGHTS,
+        "EPOCHS": UNetConfig.EPOCHS,
+        "BATCH_SIZE": UNetConfig.BATCH_SIZE,
+        "LEARNING_RATE": UNetConfig.LEARNING_RATE,
+        "IMG_SIZE": UNetConfig.IMG_SIZE,
+        "PATIENCE": UNetConfig.PATIENCE,
+    }
+
     payload = {
         "model_type": "unet",
         "dataset_s3_prefix": DATASET_S3_PREFIX,
@@ -124,7 +134,7 @@ def train_unet_model(**context):
         "mlflow_uri": mlflow_public_uri,
         "experiment_name": EXPERIMENT_NAME,
         "run_name_prefix": "unet",
-        "config_overrides": {},
+        "config_overrides": config_overrides,
     }
 
     client = RunPodClient(RUNPOD_ENDPOINT_ID)
