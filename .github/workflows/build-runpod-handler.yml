@@ -7,6 +7,14 @@ on:
         description: "Tag para la imagen (además de 'latest')"
         required: false
         default: "latest"
+      profile:
+        description: "Perfil RunPod a usar (luis o santiago)"
+        required: true
+        default: "santiago"
+        type: choice
+        options:
+          - luis
+          - santiago
   push:
     branches:
       - main
@@ -34,21 +42,38 @@ jobs:
 
       - name: Configurar variables según el usuario
         run: |
-          echo "DEBUG: github.actor = ${{ github.actor }}"
-          if [ "${{ github.actor }}" = "LuisAli22" ]; then
+          # Leer el perfil desde airflow/config/.runpod-profile (versionado en git)
+          if [ -f "airflow/config/.runpod-profile" ]; then
+            PROFILE=$(grep "^RUNPOD_PROFILE=" airflow/config/.runpod-profile | cut -d'=' -f2 | tr -d ' ')
+            echo "🎯 Perfil leído desde airflow/config/.runpod-profile: $PROFILE"
+          elif [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            # Fallback: input manual si se ejecuta manualmente
+            PROFILE="${{ github.event.inputs.profile }}"
+            echo "🎯 Perfil seleccionado manualmente: $PROFILE"
+          else
+            # Fallback: detección por github.actor
+            if [ "${{ github.actor }}" = "LuisAli22" ]; then
+              PROFILE="luis"
+            else
+              PROFILE="santiago"
+            fi
+            echo "🤖 Perfil auto-detectado por actor: $PROFILE (actor: ${{ github.actor }})"
+          fi
+          
+          # Configurar variables según el perfil
+          if [ "$PROFILE" = "luis" ]; then
             echo "DOCKER_USERNAME=${{ secrets.DOCKERHUB_USERNAME_LUIS }}" >> $GITHUB_ENV
             echo "DOCKER_TOKEN=${{ secrets.DOCKERHUB_TOKEN_LUIS }}" >> $GITHUB_ENV
             echo "RUNPOD_ENDPOINT_ID=${{ vars.RUNPOD_ENDPOINT_ID_LUIS }}" >> $GITHUB_ENV
             echo "RUNPOD_API_KEY=${{ secrets.RUNPOD_API_KEY_LUIS }}" >> $GITHUB_ENV
-            echo "✓ Usando credentials de Luis (username: ${{ secrets.DOCKERHUB_USERNAME_LUIS }})"
+            echo "✓ Usando credentials de Luis (Docker Hub: lali22)"
           else
             echo "DOCKER_USERNAME=${{ secrets.DOCKERHUB_USERNAME }}" >> $GITHUB_ENV
             echo "DOCKER_TOKEN=${{ secrets.DOCKERHUB_TOKEN }}" >> $GITHUB_ENV
             echo "RUNPOD_ENDPOINT_ID=${{ vars.RUNPOD_ENDPOINT_ID_SANTIAGO }}" >> $GITHUB_ENV
-            echo "RUNPOD_API_KEY=${{ secrets.RUNPOD_API_KEY_SANTIAGO }}" >> $GITHUB_ENV
-            echo "✓ Usando credentials de Santiago (default)"
+            echo "RUNPOD_API_KEY=${{ secrets.RUNPOD_API_KEY }}" >> $GITHUB_ENV
+            echo "✓ Usando credentials de Santiago"
           fi
-          echo "DEBUG: DOCKER_USERNAME y RUNPOD_ENDPOINT_ID seteados"
 
       - name: Free disk space
         run: |

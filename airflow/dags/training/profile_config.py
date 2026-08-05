@@ -1,5 +1,6 @@
 """RunPod profile configuration."""
 import os
+from pathlib import Path
 
 
 class RunPodProfileConfig:
@@ -7,7 +8,17 @@ class RunPodProfileConfig:
 
     @staticmethod
     def get_active_profile() -> str:
-        """Get active profile name."""
+        """Get active profile name from config/.runpod-profile or env var."""
+        # Primero intenta leer de airflow/config/.runpod-profile (versionado en git)
+        profile_file = Path(__file__).parent.parent.parent / "config" / ".runpod-profile"
+        if profile_file.exists():
+            for line in profile_file.read_text().splitlines():
+                line = line.strip()
+                if line and not line.startswith("#") and "=" in line:
+                    key, value = line.split("=", 1)
+                    if key.strip() == "RUNPOD_PROFILE":
+                        return value.strip()
+        # Fallback a variable de entorno (para compatibilidad)
         return os.getenv("RUNPOD_PROFILE", "santiago")
 
     @staticmethod
