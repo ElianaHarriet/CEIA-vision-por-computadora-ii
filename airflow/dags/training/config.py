@@ -71,3 +71,8 @@ class UNetConfig:
     LEARNING_RATE = float(os.getenv("UNET_LR", "1e-4"))
     IMG_SIZE = (int(os.getenv("UNET_IMG_SIZE", "640")),) * 2
     PATIENCE = int(os.getenv("UNET_PATIENCE", "10"))
+    # sqrt(1/freq) por clase, normalizado a suma 1. Frecuencias de píxeles
+    # (train): Background 80%, Dent 7%, Scratch 1.7%, NoDamage 3.6%, Severe 7%.
+    # El fondo domina el Dice; estos pesos le quitan fuerza para que las clases
+    # de daño minoritarias no se pierdan. Desactivar pasando una lista vacía.
+    CLASS_WEIGHTS = [0.057, 0.207, 0.286, 0.253, 0.197]
