@@ -60,14 +60,14 @@ class YOLOConfig:
 class UNetConfig:
     """Configuration for U-Net training (overridable via env vars)."""
 
-    ENCODER = os.getenv("UNET_ENCODER", "resnet34")
+    ENCODER = os.getenv("UNET_ENCODER", "resnet50")
     ENCODER_WEIGHTS = os.getenv("UNET_ENCODER_WEIGHTS", "imagenet")
     # Mask pixel values are 0 (background, unlabeled) plus one index per
     # entry in CLASS_NAMES (data_preparation_semantic_dag.py) — 4 damage
     # classes + background = 5 distinct values, not 4.
     NUM_CLASSES = 5
-    EPOCHS = int(os.getenv("UNET_EPOCHS", "100"))
-    BATCH_SIZE = int(os.getenv("UNET_BATCH_SIZE", "16"))
+    EPOCHS = int(os.getenv("UNET_EPOCHS", "60"))
+    BATCH_SIZE = int(os.getenv("UNET_BATCH_SIZE", "8"))
     LEARNING_RATE = float(os.getenv("UNET_LR", "1e-4"))
     IMG_SIZE = (int(os.getenv("UNET_IMG_SIZE", "640")),) * 2
     PATIENCE = int(os.getenv("UNET_PATIENCE", "10"))
