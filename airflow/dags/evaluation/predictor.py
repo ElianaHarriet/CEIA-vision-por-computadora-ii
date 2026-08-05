@@ -1,4 +1,5 @@
 """Predictors for evaluation."""
+import os
 import numpy as np
 import torch
 from PIL import Image
@@ -10,9 +11,12 @@ from albumentations.pytorch import ToTensorV2
 class YOLOPredictor:
     """Predictor for YOLO models."""
 
-    def __init__(self, model):
-        """Initialize predictor."""
+    def __init__(self, model, conf: float = None):
+        """Initialize predictor. ``conf`` defaults to the ``YOLO_CONF`` env var."""
         self.model = model
+        self.conf = conf if conf is not None else float(
+            os.getenv("YOLO_CONF", "0.4")
+        )
 
     def predict(self, image_paths: dict):
         """Predict on images."""
@@ -27,21 +31,28 @@ class YOLOPredictor:
     def _predict_single(self, image_path: str):
         """Predict single image."""
         results = self.model.predict(
-            image_path, verbose=False, retina_masks=True
+            image_path, verbose=False, retina_masks=True, conf=self.conf
         )
         return self._extract_masks(results[0])
 
     def _extract_masks(self, result):
         """Extract masks from result."""
         if result.masks is None:
-            return {'masks': [], 'boxes': [], 'confidences': []}
+            return {
+                'masks': [],
+                'boxes': [],
+                'confidences': [],
+                'classes': []
+            }
         masks = result.masks.data.cpu().numpy()
         boxes = result.boxes.xyxy.cpu().numpy()
         confs = result.boxes.conf.cpu().numpy()
+        classes = result.boxes.cls.cpu().numpy()
         return {
             'masks': masks,
             'boxes': boxes,
-            'confidences': confs
+            'confidences': confs,
+            'classes': classes
         }
 
 

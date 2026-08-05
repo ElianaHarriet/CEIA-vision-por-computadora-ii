@@ -8,7 +8,7 @@ class TrainingConfig:
     @staticmethod
     def get_data_path():
         """Get base data path."""
-        return "/opt/airflow/car_damage_detection/car-damages"
+        return "/opt/airflow/car_damage_detection/data"
 
     @staticmethod
     def get_instance_path():
@@ -47,14 +47,15 @@ class TrainingConfig:
 
 
 class YOLOConfig:
-    """Configuration for YOLO training."""
+    """Configuration for YOLO training (overridable via env vars)."""
 
-    MODEL = "yolov8x-seg.pt"  # Extra Large - 72M params, mejor performance
-    EPOCHS = 150  # Aumentado de 100 para dar más tiempo de convergencia
-    IMG_SIZE = 640
-    BATCH_SIZE = 16
+    # Valores inyectados por docker-compose.yaml desde .env o sus defaults
+    MODEL = os.getenv("YOLO_MODEL")
+    EPOCHS = int(os.getenv("YOLO_EPOCHS"))
+    IMG_SIZE = int(os.getenv("YOLO_IMG_SIZE"))
+    BATCH_SIZE = int(os.getenv("YOLO_BATCH_SIZE"))
     DEVICE = 0
-    PATIENCE = 20  # Aumentado de 10 para dar más margen antes de early stopping
+    PATIENCE = int(os.getenv("YOLO_PATIENCE"))
 
 
 class UNetConfig:

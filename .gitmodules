@@ -1,0 +1,3 @@
+[submodule "vision_computadora_II"]
+	path = vision_computadora_II
+	url = https://github.com/FIUBA-Posgrado-Inteligencia-Artificial/vision_computadora_II.git

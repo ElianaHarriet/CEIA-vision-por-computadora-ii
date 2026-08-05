@@ -8,13 +8,13 @@ class EvaluationConfig:
     @staticmethod
     def get_instance_path():
         """Get instance data path."""
-        base = "/opt/airflow/car_damage_detection/car-damages"
+        base = "/opt/airflow/car_damage_detection/data"
         return f"{base}/car-damages-ready/instance"
 
     @staticmethod
     def get_semantic_path():
         """Get semantic data path."""
-        base = "/opt/airflow/car_damage_detection/car-damages"
+        base = "/opt/airflow/car_damage_detection/data"
         return f"{base}/car-damages-ready/semantic"
 
     @staticmethod
@@ -50,8 +50,9 @@ class EvaluationConfig:
         """Get path for evaluation results."""
         return "/opt/airflow/evaluation_results"
 
-    NUM_CLASSES = 4
+    NUM_CLASSES = 5
     CLASS_NAMES = [
+        "Background",
         "Minor Damage (Dent)",
         "Minor Damage (Scratch)",
         "No Damage",

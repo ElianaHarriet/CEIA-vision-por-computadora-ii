@@ -22,7 +22,13 @@ class MetricsCalculator:
         }
 
     def _calculate_per_image(self, pred_dict, gt_dict):
-        """Calculate metrics per image."""
+        """Calculate metrics per image.
+
+        Images without detections (pred is None) are skipped, so the
+        per-image and aggregated metrics are computed over the subset of
+        images where the model produced a prediction. This means the
+        instance and semantic evaluation sets may differ in size.
+        """
         results = {}
         for name in pred_dict.keys():
             if name not in gt_dict:
@@ -44,12 +50,24 @@ class MetricsCalculator:
             'precision': self._calculate_precision(pred, gt),
             'recall': self._calculate_recall(pred, gt),
             'f1_score': self._calculate_f1(pred, gt),
+            'area_error': self._calculate_area_error(pred, gt),
+            'relative_area_error': self._calculate_relative_area_error(pred, gt),
         }
 
+    @staticmethod
+    def _damage_mask(mask):
+        """Binarize to damage pixels per the binary comparison option.
+
+        Classes 0, 1, 3 (Dent, Scratch, Severe) count as damage; class 2
+        (No Damage) is treated as background. Semantic masks use value =
+        YOLO class + 1, so damage == {1, 2, 4}.
+        """
+        return (mask >= 1) & (mask != 3)
+
     def _calculate_iou(self, pred, gt):
-        """Calculate global IoU."""
-        pred_bin = pred > 0
-        gt_bin = gt > 0
+        """Calculate global IoU on the binary damage mask."""
+        pred_bin = self._damage_mask(pred)
+        gt_bin = self._damage_mask(gt)
         intersection = np.logical_and(pred_bin, gt_bin).sum()
         union = np.logical_or(pred_bin, gt_bin).sum()
         return float(intersection / union) if union > 0 else 0.0
@@ -98,6 +116,20 @@ class MetricsCalculator:
             zero_division=0
         )
 
+    def _calculate_area_error(self, pred, gt):
+        """Calculate absolute damage-area error in pixels."""
+        pred_area = self._damage_mask(pred).sum()
+        gt_area = self._damage_mask(gt).sum()
+        return float(abs(pred_area - gt_area))
+
+    def _calculate_relative_area_error(self, pred, gt):
+        """Calculate relative area error |A_pred - A_gt| / A_gt."""
+        pred_area = self._damage_mask(pred).sum()
+        gt_area = self._damage_mask(gt).sum()
+        if gt_area == 0:
+            return 0.0
+        return float(abs(pred_area - gt_area) / gt_area)
+
     def _aggregate_metrics(self, per_image: dict):
         """Aggregate per-image metrics."""
         if not per_image:
@@ -107,6 +139,8 @@ class MetricsCalculator:
         all_prec = [m['precision'] for m in per_image.values()]
         all_rec = [m['recall'] for m in per_image.values()]
         all_f1 = [m['f1_score'] for m in per_image.values()]
+        all_area_err = [m['area_error'] for m in per_image.values()]
+        all_rel_area_err = [m['relative_area_error'] for m in per_image.values()]
         return {
             'mean_iou': float(np.mean(all_ious)),
             'std_iou': float(np.std(all_ious)),
@@ -114,6 +148,8 @@ class MetricsCalculator:
             'mean_precision': float(np.mean(all_prec)),
             'mean_recall': float(np.mean(all_rec)),
             'mean_f1_score': float(np.mean(all_f1)),
+            'mean_area_error': float(np.mean(all_area_err)),
+            'mean_relative_area_error': float(np.mean(all_rel_area_err)),
         }
 
 

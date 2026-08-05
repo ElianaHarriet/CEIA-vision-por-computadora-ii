@@ -72,7 +72,7 @@ def download_dataset_task(**context):
     """Download dataset from Roboflow."""
     config = RoboflowConfig.from_env('ROBOFLOW_PROJECT', 'ROBOFLOW_VERSION')
     paths = DatasetPaths.create(
-        "/opt/airflow/car_damage_detection/car-damages",
+        "/opt/airflow/car_damage_detection/data",
         "car-damages-forked",
         "car-damages-ready"
     )
@@ -135,7 +135,7 @@ def _log_download_stats(paths: DatasetPaths, fs: FileSystemOperations) -> None:
 def prepare_datasets_task(**context):
     """Prepare datasets in instance and semantic formats."""
     paths = DatasetPaths.create(
-        "/opt/airflow/car_damage_detection/car-damages",
+        "/opt/airflow/car_damage_detection/data",
         "car-damages-forked",
         "car-damages-ready"
     )
@@ -163,7 +163,7 @@ def _prepare_all_splits(preparer: SemanticDatasetPreparer) -> dict:
 def validate_prepared_data(**context):
     """Validate prepared dataset integrity."""
     paths = DatasetPaths.create(
-        "/opt/airflow/car_damage_detection/car-damages",
+        "/opt/airflow/car_damage_detection/data",
         "car-damages-forked",
         "car-damages-ready"
     )

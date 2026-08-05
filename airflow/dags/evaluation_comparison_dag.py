@@ -157,7 +157,10 @@ def flatten_instance_masks(**context):
         key='instance_predictions_path'
     )
     predictions = load_pickle(predictions_path)
-    flattener = MaskFlattener(strategy='or')
+    flattener = MaskFlattener(
+        strategy='class_aware',
+        class_map={0: 1, 1: 2, 2: 3, 3: 4}
+    )
     flattened = flattener.flatten_predictions(predictions)
     flattened_path = save_pickle(
         flattened, _cache_path(context, 'flattened_predictions')
@@ -171,7 +174,7 @@ def flatten_instance_masks(**context):
 def calculate_metrics(**context):
     """Calcular métricas de evaluación para ambos modelos."""
     from evaluation.metrics_calculator import MetricsCalculator, ComparisonCalculator
-    from evaluation.xcom_data import load_pickle
+    from evaluation.xcom_data import save_pickle, load_pickle
     gt_masks = load_pickle(context['ti'].xcom_pull(
         task_ids='load_test_dataset',
         key='gt_masks_path'
@@ -203,7 +206,10 @@ def calculate_metrics(**context):
         'semantic_metrics': metrics_semantic,
         'comparison': comparison
     }
-    context['ti'].xcom_push(key='all_metrics', value=result)
+    all_metrics_path = save_pickle(
+        result, _cache_path(context, 'all_metrics')
+    )
+    context['ti'].xcom_push(key='all_metrics_path', value=all_metrics_path)
     return {
         'instance_mean_iou': metrics_instance['aggregated']['mean_iou'],
         'semantic_mean_iou': metrics_semantic['aggregated']['mean_iou']
@@ -214,10 +220,10 @@ def generate_visualizations(**context):
     """Generar visualizaciones de comparación."""
     from evaluation.visualizer import ComparisonVisualizer
     from evaluation.xcom_data import load_pickle
-    all_metrics = context['ti'].xcom_pull(
+    all_metrics = load_pickle(context['ti'].xcom_pull(
         task_ids='calculate_metrics',
-        key='all_metrics'
-    )
+        key='all_metrics_path'
+    ))
     test_images = context['ti'].xcom_pull(
         task_ids='load_test_dataset',
         key='test_images'
@@ -285,10 +291,11 @@ def _prepare_samples(test_imgs, gt_masks, inst_preds, sem_preds, metrics):
 def generate_comparison_report(**context):
     """Generar reporte de comparación."""
     from evaluation.report_generator import ComparisonReport
-    all_metrics = context['ti'].xcom_pull(
+    from evaluation.xcom_data import load_pickle
+    all_metrics = load_pickle(context['ti'].xcom_pull(
         task_ids='calculate_metrics',
-        key='all_metrics'
-    )
+        key='all_metrics_path'
+    ))
     hypothesis = context['ti'].xcom_pull(
         task_ids='validate_hypothesis',
         key='hypothesis_result'
@@ -311,10 +318,11 @@ def generate_comparison_report(**context):
 def validate_hypothesis(**context):
     """Validar o refutar la hipótesis del proyecto."""
     from evaluation.hypothesis_validator import HypothesisValidator
-    all_metrics = context['ti'].xcom_pull(
+    from evaluation.xcom_data import load_pickle
+    all_metrics = load_pickle(context['ti'].xcom_pull(
         task_ids='calculate_metrics',
-        key='all_metrics'
-    )
+        key='all_metrics_path'
+    ))
     validator = HypothesisValidator()
     result = validator.validate(
         all_metrics['instance_metrics'],
@@ -327,12 +335,13 @@ def validate_hypothesis(**context):
 def log_comparison_to_mlflow(**context):
     """Registrar comparación completa en MLflow."""
     import mlflow
+    from evaluation.xcom_data import load_pickle
     mlflow.set_tracking_uri(MLFLOW_URI)
     mlflow.set_experiment(EXPERIMENT_NAME)
-    all_metrics = context['ti'].xcom_pull(
+    all_metrics = load_pickle(context['ti'].xcom_pull(
         task_ids='calculate_metrics',
-        key='all_metrics'
-    )
+        key='all_metrics_path'
+    ))
     hypothesis = context['ti'].xcom_pull(
         task_ids='validate_hypothesis',
         key='hypothesis_result'

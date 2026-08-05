@@ -73,9 +73,11 @@ def setup_training_environment(**context):
     """Validar que RunPod esté configurado (ya no hay GPU local que chequear)."""
     import mlflow
     from airflow.models import Variable
+    from training.runpod_client import RunPodClient
     if not RUNPOD_ENDPOINT_ID:
         raise ValueError("RUNPOD_ENDPOINT_ID no está configurado en .env")
     Variable.get("RUNPOD_API_KEY")  # smoke test: falla si no está en secrets
+    RunPodClient(RUNPOD_ENDPOINT_ID).check_balance()
     mlflow.set_tracking_uri(MLFLOW_URI)
     mlflow.set_experiment(EXPERIMENT_NAME)
     print(f"✓ RunPod endpoint configurado: {RUNPOD_ENDPOINT_ID}")
@@ -193,6 +195,9 @@ train_model = PythonOperator(
     task_id='train_unet_model',
     python_callable=train_unet_model,
     dag=dag,
+    # Un retry re-dispara el job en RunPod y duplica la facturación: si el
+    # job falla o expira, poll_job ya lo cancela. No reintentar.
+    retries=0,
 )
 
 register_model = PythonOperator(

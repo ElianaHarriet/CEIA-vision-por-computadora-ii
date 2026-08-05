@@ -65,12 +65,20 @@ x-airflow-common: &airflow-common
     MODEL_VERSION_INSTANCE: ${MODEL_VERSION_INSTANCE:-latest}
     MODEL_VERSION_SEMANTIC: ${MODEL_VERSION_SEMANTIC:-latest}
     RUNPOD_ENDPOINT_ID: ${RUNPOD_ENDPOINT_ID:-}
+    RUNPOD_MIN_BALANCE: ${RUNPOD_MIN_BALANCE:-2}
+    YOLO_MODEL: ${YOLO_MODEL:-yolov8s-seg.pt}
+    YOLO_EPOCHS: ${YOLO_EPOCHS:-100}
+    YOLO_IMG_SIZE: ${YOLO_IMG_SIZE:-640}
+    YOLO_BATCH_SIZE: ${YOLO_BATCH_SIZE:-16}
+    YOLO_PATIENCE: ${YOLO_PATIENCE:-10}
+    YOLO_CONF: ${YOLO_CONF:-0.4}
   volumes:
     - ${AIRFLOW_PROJ_DIR:-./airflow}/dags:/opt/airflow/dags
     - ${AIRFLOW_PROJ_DIR:-./airflow}/logs:/opt/airflow/logs
     - ${AIRFLOW_PROJ_DIR:-./airflow}/config:/opt/airflow/config
     - ${AIRFLOW_PROJ_DIR:-./airflow}/plugins:/opt/airflow/plugins
     - ${AIRFLOW_PROJ_DIR:-./airflow}/secrets:/opt/secrets
+    - ${AIRFLOW_PROJ_DIR:-./airflow}/evaluation_results:/opt/airflow/evaluation_results
     - ./car_damage_detection:/opt/airflow/car_damage_detection
   networks:
     - frontend
@@ -364,6 +372,7 @@ services:
       - ${AIRFLOW_PROJ_DIR:-./airflow}/config:/opt/airflow/config
       - ${AIRFLOW_PROJ_DIR:-./airflow}/plugins:/opt/airflow/plugins
       - ${AIRFLOW_PROJ_DIR:-./airflow}/secrets:/opt/secrets
+      - ${AIRFLOW_PROJ_DIR:-./airflow}/evaluation_results:/opt/airflow/evaluation_results
       - ./car_damage_detection:/opt/airflow/car_damage_detection
       - cloudflared_logs:/var/log/cloudflared:ro
     healthcheck:
