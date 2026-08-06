@@ -1,9 +1,35 @@
 """U-Net trainer for semantic segmentation."""
 import torch
+import torch.nn.functional as F
 from pathlib import Path
 import segmentation_models_pytorch as smp
 from tqdm import tqdm
 from training.mlflow_manager import MLflowManager
+
+
+class WeightedDiceLoss(torch.nn.Module):
+    """Dice loss with per-class weights.
+
+    SMP's DiceLoss has no ``class_weights`` argument, so this reimplements
+    it: the one-hot masks are weighted per class before computing the Dice
+    coefficient. Background covers ~80% of pixels, so unweighted Dice lets
+    it dominate the gradient; these weights amplify the rare damage classes.
+    """
+
+    def __init__(self, weights, smooth=1.0):
+        super().__init__()
+        self.register_buffer("class_weights", torch.tensor(weights, dtype=torch.float32))
+        self.smooth = smooth
+
+    def forward(self, logits, masks):
+        """Compute weighted Dice loss."""
+        probs = F.softmax(logits, dim=1)
+        w = self.class_weights.view(1, -1, 1, 1)
+        one_hot = torch.zeros_like(probs).scatter_(1, masks.unsqueeze(1), 1.0)
+        intersection = (probs * one_hot * w).sum(dim=(2, 3)).sum(dim=0)
+        cardinality = ((probs + one_hot) * w).sum(dim=(2, 3)).sum(dim=0)
+        dice = (2.0 * intersection + self.smooth) / (cardinality + self.smooth)
+        return 1.0 - dice.mean()
 
 
 class UNetTrainer:
@@ -50,7 +76,11 @@ class UNetTrainer:
 
     def _setup_criterion(self):
         """Setup loss function."""
-        self.criterion = smp.losses.DiceLoss(mode='multiclass')
+        weights = getattr(self.config, "CLASS_WEIGHTS", None)
+        if weights:
+            self.criterion = WeightedDiceLoss(weights)
+        else:
+            self.criterion = smp.losses.DiceLoss(mode='multiclass')
 
     def _setup_optimizer(self):
         """Setup optimizer and scheduler."""

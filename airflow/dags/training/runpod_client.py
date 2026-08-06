@@ -93,12 +93,21 @@ class RunPodClient:
         print(f"✓ RunPod job submitted: {job_id}")
         return job_id
 
-    def get_status(self, job_id: str) -> dict:
-        """Get the current status of a job."""
+    def get_status(self, job_id: str, timeout_s: float = 60) -> dict:
+        """Get the current status of a job, retrying transient API errors."""
         url = f"{RUNPOD_API_BASE}/{self.endpoint_id}/status/{job_id}"
-        response = requests.get(url, headers=self._headers(), timeout=30)
-        response.raise_for_status()
-        return response.json()
+        for attempt in range(3):
+            try:
+                response = requests.get(
+                    url, headers=self._headers(), timeout=timeout_s
+                )
+                response.raise_for_status()
+                return response.json()
+            except requests.RequestException as exc:
+                if attempt == 2:
+                    raise
+                print(f"⚠ status poll attempt {attempt+1} failed: {exc}")
+                time.sleep(10 * (attempt + 1))
 
     def cancel_job(self, job_id: str) -> dict:
         """Cancel a running job so it stops billing."""
