@@ -4,24 +4,59 @@ Reuses the trainer/config/mlflow code from airflow/dags/training as-is
 (COPY'd into /app/training at build time), so training logic stays in one
 place instead of being duplicated between Airflow and this handler.
 
-Version: 1.0.1 - Force rebuild to fix unhealthy workers
+Version: 1.0.2 - Add startup logging and error handling
 """
 import os
 import sys
 import re
+import logging
 from pathlib import Path
+
+# Configure logging to stdout immediately
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s [%(levelname)s] %(message)s',
+    handlers=[logging.StreamHandler(sys.stdout)]
+)
+logger = logging.getLogger(__name__)
+
+logger.info("=" * 60)
+logger.info("RunPod handler starting...")
+logger.info(f"Python version: {sys.version}")
+logger.info(f"Working directory: {os.getcwd()}")
+logger.info("=" * 60)
 
 sys.path.insert(0, "/app")
 
-import runpod  # noqa: E402
-from dataset_fetcher import download_dataset  # noqa: E402
-from training.mlflow_manager import MLflowManager  # noqa: E402
-from training.config import YOLOConfig, UNetConfig  # noqa: E402
-from training.yolo_trainer import YOLOTrainer  # noqa: E402
-from training.unet_trainer import UNetTrainer  # noqa: E402
-from training.dataloader_factory import DataLoaderFactory  # noqa: E402
+try:
+    import runpod  # noqa: E402
+    logger.info(f"✓ runpod imported successfully (version: {runpod.__version__})")
+except Exception as e:
+    logger.error(f"✗ Failed to import runpod: {e}")
+    raise
+
+try:
+    from dataset_fetcher import download_dataset  # noqa: E402
+    logger.info("✓ dataset_fetcher imported")
+except Exception as e:
+    logger.error(f"✗ Failed to import dataset_fetcher: {e}")
+    raise
+
+try:
+    from training.mlflow_manager import MLflowManager  # noqa: E402
+    from training.config import YOLOConfig, UNetConfig  # noqa: E402
+    from training.yolo_trainer import YOLOTrainer  # noqa: E402
+    from training.unet_trainer import UNetTrainer  # noqa: E402
+    from training.dataloader_factory import DataLoaderFactory  # noqa: E402
+    logger.info("✓ All training modules imported successfully")
+except Exception as e:
+    logger.error(f"✗ Failed to import training modules: {e}")
+    raise
 
 DATASET_DIR = "/app/dataset"
+logger.info(f"Dataset directory: {DATASET_DIR}")
+logger.info("Handler initialization complete")
+logger.info("=" * 60)
 
 
 def _build_config(base_config, overrides: dict):
@@ -101,6 +136,7 @@ def _train_unet(job_input: dict, mlflow_mgr: MLflowManager) -> dict:
 
 def handler(event):
     """RunPod entrypoint: dispatch to the right trainer based on model_type."""
+    logger.info(f"Handler called with event: {event}")
     job_input = event["input"]
     model_type = job_input["model_type"]
 
@@ -119,4 +155,10 @@ def handler(event):
     raise ValueError(f"Unknown model_type: {model_type}")
 
 
-runpod.serverless.start({"handler": handler})
+logger.info("Starting RunPod serverless handler...")
+try:
+    runpod.serverless.start({"handler": handler})
+    logger.info("RunPod serverless handler started successfully")
+except Exception as e:
+    logger.error(f"Failed to start RunPod serverless handler: {e}", exc_info=True)
+    raise
