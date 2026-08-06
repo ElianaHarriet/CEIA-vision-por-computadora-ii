@@ -26,4 +26,7 @@ COPY airflow/dags/training /app/training
 COPY runpod_handler/handler.py /app/handler.py
 COPY runpod_handler/dataset_fetcher.py /app/dataset_fetcher.py
 
+# Test that Python can at least import the handler module
+RUN python -c "import sys; sys.path.insert(0, '/app'); import handler; print('Handler module imported successfully')"
+
 CMD ["python", "-u", "/app/handler.py"]
