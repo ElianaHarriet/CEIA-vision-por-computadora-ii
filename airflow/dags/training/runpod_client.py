@@ -135,11 +135,23 @@ class RunPodClient:
         return job_id
 
     def get_status(self, job_id: str) -> dict:
-        """Get the current status of a job."""
+        """Get the current status of a job with retry logic."""
         url = f"{RUNPOD_API_BASE}/{self.endpoint_id}/status/{job_id}"
-        response = self._session.get(url, headers=self._headers(), timeout=60)
-        response.raise_for_status()
-        return response.json()
+        
+        # Retry with exponential backoff for transient network issues
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                response = self._session.get(url, headers=self._headers(), timeout=60)
+                response.raise_for_status()
+                return response.json()
+            except requests.exceptions.RequestException as e:
+                if attempt < max_retries - 1:
+                    backoff = 5 * (2 ** attempt)  # 5s, 10s, 20s
+                    print(f"⚠️  Status request failed (attempt {attempt + 1}/{max_retries}), retrying in {backoff}s: {e}")
+                    time.sleep(backoff)
+                else:
+                    raise
 
     def cancel_job(self, job_id: str) -> dict:
         """Cancel a running job so it stops billing."""
