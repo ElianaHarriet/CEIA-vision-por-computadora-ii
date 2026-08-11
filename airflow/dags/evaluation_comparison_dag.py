@@ -363,6 +363,17 @@ def log_comparison_to_mlflow(**context):
         _log_params_to_mlflow(model_info)
         _log_artifacts_to_mlflow(viz_path, report_path)
         mlflow.log_param('hypothesis_validated', hypothesis['validated'])
+        mlflow.log_metric('p_value', hypothesis['p_value'])
+        ci = hypothesis.get('ci_difference')
+        if ci is not None:
+            mlflow.log_params({
+                'ci_iou_instance_low': hypothesis['ci_iou_instance'][0],
+                'ci_iou_instance_high': hypothesis['ci_iou_instance'][1],
+                'ci_iou_semantic_low': hypothesis['ci_iou_semantic'][0],
+                'ci_iou_semantic_high': hypothesis['ci_iou_semantic'][1],
+                'ci_diff_low': ci[0],
+                'ci_diff_high': ci[1],
+            })
         run_id = mlflow.active_run().info.run_id
     print(f"✓ Logged to MLflow (Run ID: {run_id})")
     _cleanup_xcom_cache(context)
@@ -386,6 +397,14 @@ def _log_metrics_to_mlflow(all_metrics):
             mlflow.log_metric(f"instance_{key}", vals['model_a'])
             mlflow.log_metric(f"semantic_{key}", vals['model_b'])
             mlflow.log_metric(f"diff_{key}", vals['difference'])
+    per_class = comp.get('per_class_iou', {})
+    class_names = EvaluationConfig.CLASS_NAMES
+    for idx, name in enumerate(class_names):
+        vals = per_class.get(str(idx), {})
+        safe = name.replace(' ', '_').replace('(', '').replace(')', '')
+        mlflow.log_metric(f"instance_iou_class_{safe}", vals.get('model_a', 0.0))
+        mlflow.log_metric(f"semantic_iou_class_{safe}", vals.get('model_b', 0.0))
+        mlflow.log_metric(f"diff_iou_class_{safe}", vals.get('difference', 0.0))
 
 
 def _log_params_to_mlflow(model_info):

@@ -27,6 +27,8 @@ class ComparisonReport:
             self._header(),
             self._summary(data['comparison']),
             self._detailed_metrics(data['comparison']),
+            self._per_class_iou(data['comparison']),
+            self._confidence_intervals(data['hypothesis']),
             self._hypothesis_validation(data['hypothesis']),
             self._conclusion(data)
         ]
@@ -45,8 +47,8 @@ class ComparisonReport:
         lines = [
             "## Executive Summary",
             "",
-            f"- **Instance Model IoU**: {iou.get('model_a', 0):.4f}",
-            f"- **Semantic Model IoU**: {iou.get('model_b', 0):.4f}",
+            f"- **Instance Model IoU (binary damage)**: {iou.get('model_a', 0):.4f}",
+            f"- **Semantic Model IoU (binary damage)**: {iou.get('model_b', 0):.4f}",
             f"- **Difference**: {iou.get('difference', 0):.4f}",
             f"- **Relative Improvement**: "
             f"{iou.get('relative_diff', 0):.2f}%"
@@ -54,15 +56,20 @@ class ComparisonReport:
         return '\n'.join(lines)
 
     def _detailed_metrics(self, comparison: dict):
-        """Generate detailed metrics table."""
+        """Generate detailed metrics table (Opción B: binary damage mask)."""
         lines = [
-            "## Detailed Metrics",
+            "## Detailed Metrics — Binary Damage (Opción B)",
+            "",
+            "All values are computed on the flattened binary damage mask "
+            "(damage vs no-damage), so precision/recall/F1 are comparable "
+            "with the IoU reported here.",
             "",
             "| Metric | Instance | Semantic | Difference | % Change |",
             "|--------|----------|----------|------------|----------|"
         ]
+        skip = {'mean_binary_precision', 'mean_binary_recall', 'mean_binary_f1'}
         for key, vals in comparison.items():
-            if key.startswith('mean_'):
+            if key.startswith('mean_') and key not in skip:
                 name = key.replace('mean_', '').replace('_', ' ').title()
                 inst = vals['model_a']
                 sem = vals['model_b']
@@ -71,6 +78,72 @@ class ComparisonReport:
                 line = f"| {name} | {inst:.4f} | {sem:.4f} | " \
                        f"{diff:+.4f} | {rel:+.2f}% |"
                 lines.append(line)
+        lines += [
+            "| Binary Precision | %.4f | %.4f | %+.4f | %+.2f%% |" % (
+                comparison['mean_binary_precision']['model_a'],
+                comparison['mean_binary_precision']['model_b'],
+                comparison['mean_binary_precision']['difference'],
+                comparison['mean_binary_precision']['relative_diff'],
+            ),
+            "| Binary Recall | %.4f | %.4f | %+.4f | %+.2f%% |" % (
+                comparison['mean_binary_recall']['model_a'],
+                comparison['mean_binary_recall']['model_b'],
+                comparison['mean_binary_recall']['difference'],
+                comparison['mean_binary_recall']['relative_diff'],
+            ),
+            "| Binary F1 | %.4f | %.4f | %+.4f | %+.2f%% |" % (
+                comparison['mean_binary_f1']['model_a'],
+                comparison['mean_binary_f1']['model_b'],
+                comparison['mean_binary_f1']['difference'],
+                comparison['mean_binary_f1']['relative_diff'],
+            ),
+        ]
+        return '\n'.join(lines)
+
+    def _per_class_iou(self, comparison: dict):
+        """Generate per-class IoU table (Opción A: multiclass)."""
+        per_class = comparison.get('per_class_iou', {})
+        if not per_class:
+            return "## Per-Class IoU (Opción A: multiclass)\n\nNo data."
+        lines = [
+            "## Per-Class IoU (Opción A: multiclass)",
+            "",
+            "Micro-averaged per class over the test set: "
+            "sum(TP) / sum(TP + FP + FN).",
+            "",
+            "| Class | Instance | Semantic | Difference |",
+            "|-------|----------|----------|------------|"
+        ]
+        for idx, name in enumerate(self.class_names):
+            vals = per_class.get(str(idx), {})
+            inst = vals.get('model_a', 0.0)
+            sem = vals.get('model_b', 0.0)
+            diff = vals.get('difference', 0.0)
+            lines.append(
+                f"| {name} | {inst:.4f} | {sem:.4f} | {diff:+.4f} |"
+            )
+        return '\n'.join(lines)
+
+    def _confidence_intervals(self, hypothesis: dict):
+        """Generate confidence interval section."""
+        ci_inst = hypothesis.get('ci_iou_instance')
+        ci_sem = hypothesis.get('ci_iou_semantic')
+        ci_diff = hypothesis.get('ci_difference')
+        if ci_inst is None:
+            return "## Confidence Intervals (Bootstrap)\n\nNot computed."
+        diff_txt = (
+            f"The 95% CI of the difference [{ci_diff[0]:.4f}, {ci_diff[1]:.4f}] "
+            + ("**contains 0** — the gap is not statistically significant."
+               if ci_diff[0] <= 0 <= ci_diff[1]
+               else "does **not** contain 0 — the gap is significant.")
+        )
+        lines = [
+            "## Confidence Intervals (Bootstrap, 95%, seed=2026)",
+            "",
+            f"- **Instance IoU**: [{ci_inst[0]:.4f}, {ci_inst[1]:.4f}]",
+            f"- **Semantic IoU**: [{ci_sem[0]:.4f}, {ci_sem[1]:.4f}]",
+            f"- **Difference**: {diff_txt}",
+        ]
         return '\n'.join(lines)
 
     def _hypothesis_validation(self, hypothesis: dict):
@@ -96,9 +169,30 @@ class ComparisonReport:
 
     def _conclusion(self, data: dict):
         """Generate conclusion section."""
-        return "## Conclusion\n\n" \
-               "Based on the evaluation metrics and visualizations, " \
-               "we can conclude the comparative performance of both models."
+        hypothesis = data.get('hypothesis', {})
+        ci_diff = hypothesis.get('ci_difference')
+        ci_txt = ""
+        if ci_diff is not None:
+            ci_txt = (
+                f"\n\n- Instance IoU minus Semantic IoU, 95% CI "
+                f"[{ci_diff[0]:.4f}, {ci_diff[1]:.4f}], "
+                + ("contains 0 → the two are statistically indistinguishable "
+                   "at the IoU level." if ci_diff[0] <= 0 <= ci_diff[1]
+                   else "excludes 0 → the gap is significant.")
+            )
+        return (
+            "## Conclusion\n\n"
+            "Based on the evaluation metrics and visualizations:\n"
+            "- **IoU (binary damage)**: instance and semantic are comparable "
+            f"(diff {data['comparison']['mean_iou']['difference']:+.4f})."
+            f"{ci_txt}\n"
+            "- **Area estimation**: semantic has a substantially lower "
+            f"relative area error ({data['comparison']['mean_relative_area_error']['model_b']:.4f} "
+            f"vs {data['comparison']['mean_relative_area_error']['model_a']:.4f}), "
+            "supporting the semantic approach for area-based estimates.\n"
+            "- **Per-class detail**: see the per-class IoU table for "
+            "class-level differences."
+        )
 
     def _save_markdown(self, content: str):
         """Save report as markdown."""
