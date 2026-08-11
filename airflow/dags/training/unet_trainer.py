@@ -1,6 +1,8 @@
 """U-Net trainer for semantic segmentation."""
+import random
 import torch
 import torch.nn.functional as F
+import numpy as np
 from pathlib import Path
 import segmentation_models_pytorch as smp
 from tqdm import tqdm
@@ -46,10 +48,23 @@ class UNetTrainer:
     def train(self, train_loader, valid_loader):
         """Train U-Net model."""
         print("Training U-Net...")
+        self._seed_everything()
         self._setup_training()
         self._log_hyperparams()
         self._run_training_loop(train_loader, valid_loader)
         return self._get_results()
+
+    def _seed_everything(self):
+        """Fix RNG seeds so training is reproducible."""
+        seed = getattr(self.config, "SEED", 42)
+        random.seed(seed)
+        np.random.seed(seed)
+        torch.manual_seed(seed)
+        if torch.cuda.is_available():
+            torch.cuda.manual_seed_all(seed)
+        torch.backends.cudnn.deterministic = True
+        torch.backends.cudnn.benchmark = False
+        print(f"✓ Seeded everything with SEED={seed}")
 
     def _setup_training(self):
         """Setup model and device."""
@@ -108,6 +123,7 @@ class UNetTrainer:
             "num_classes": self.config.NUM_CLASSES,
             "img_size": self.config.IMG_SIZE,
             "device": str(self.device),
+            "seed": getattr(self.config, "SEED", 42),
         }
 
     def _run_training_loop(self, train_loader, valid_loader):
