@@ -26,4 +26,8 @@ COPY airflow/dags/training /app/training
 COPY runpod_handler/handler.py /app/handler.py
 COPY runpod_handler/dataset_fetcher.py /app/dataset_fetcher.py
 
+# Test that Python can at least import the training modules without errors
+# Don't import handler.py directly as it calls runpod.serverless.start()
+RUN python -c "import sys; sys.path.insert(0, '/app'); from training.config import YOLOConfig, UNetConfig; print('Training config imported successfully')"
+
 CMD ["python", "-u", "/app/handler.py"]

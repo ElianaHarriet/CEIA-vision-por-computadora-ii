@@ -23,6 +23,7 @@ if str(dags_path) not in sys.path:
 
 from training.config import TrainingConfig, YOLOConfig
 from training.validators import InstanceDataValidator
+from training.profile_config import RunPodProfileConfig
 
 # DAG configuration
 default_args = {
@@ -55,7 +56,7 @@ MODEL_NAME = TrainingConfig.get_instance_model_name()
 DATA_BUCKET = os.getenv("DATA_REPO_BUCKET_NAME", "data")
 DATASET_S3_PREFIX = "instance"
 DATA_YAML_RELPATH = "data.yaml"
-RUNPOD_ENDPOINT_ID = os.getenv("RUNPOD_ENDPOINT_ID")
+RUNPOD_ENDPOINT_ID = RunPodProfileConfig.get_endpoint_id()
 MLFLOW_TUNNEL_LOG = "/var/log/cloudflared/mlflow.log"
 S3_TUNNEL_LOG = "/var/log/cloudflared/s3.log"
 LOCAL_MODEL_DOWNLOAD_DIR = "/opt/airflow/runs/segment/car_damage_instance/weights"
@@ -84,7 +85,7 @@ def setup_training_environment(**context):
     RunPodClient(RUNPOD_ENDPOINT_ID).check_balance()
     mlflow.set_tracking_uri(MLFLOW_URI)
     mlflow.set_experiment(EXPERIMENT_NAME)
-    print(f"✓ RunPod endpoint configurado: {RUNPOD_ENDPOINT_ID}")
+    RunPodProfileConfig.print_active_config()
     print(f"✓ MLflow: {MLFLOW_URI}")
     return {"runpod_endpoint_id": RUNPOD_ENDPOINT_ID}
 
@@ -98,16 +99,47 @@ def train_yolov8_model(**context):
     mlflow_public_uri = get_quick_tunnel_url(MLFLOW_TUNNEL_LOG)
     s3_public_uri = get_quick_tunnel_url(S3_TUNNEL_LOG)
 
+    # Get MinIO credentials from environment (required)
+    # Docker Compose maps these as AWS_* variables
+    s3_access_key = os.getenv("AWS_ACCESS_KEY_ID")
+    s3_secret_key = os.getenv("AWS_SECRET_ACCESS_KEY")
+    
+    if not s3_access_key or not s3_secret_key:
+        raise ValueError(
+            "AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY must be set (check docker-compose.yaml)"
+        )
+
     payload = {
         "model_type": "yolo",
         "dataset_s3_prefix": DATASET_S3_PREFIX,
         "dataset_bucket": DATA_BUCKET,
         "data_yaml_relpath": DATA_YAML_RELPATH,
         "s3_endpoint_url": s3_public_uri,
+        "s3_access_key": s3_access_key,
+        "s3_secret_key": s3_secret_key,
         "mlflow_uri": mlflow_public_uri,
         "experiment_name": EXPERIMENT_NAME,
         "run_name_prefix": "yolov8-seg-instance",
-        "config_overrides": {},
+        "config_overrides": {
+            # Data augmentation - Color
+            "hsv_h": 0.02,       # Hue variation
+            "hsv_s": 0.8,        # Saturation augmentation
+            "hsv_v": 0.5,        # Brightness augmentation
+            
+            # Data augmentation - Geometric
+            "degrees": 15.0,     # Rotation range (degrees)
+            "translate": 0.2,    # Translation (+/- fraction)
+            "scale": 0.7,        # Scale range (gain)
+            "shear": 5.0,        # Shear range (degrees)
+            
+            # Data augmentation - Flips
+            "flipud": 0.3,       # Vertical flip probability
+            "fliplr": 0.5,       # Horizontal flip probability
+            
+            # Advanced augmentation
+            "mosaic": 1.0,       # Mosaic augmentation probability
+            "mixup": 0.15,       # Mixup augmentation probability
+        },
     }
 
     client = RunPodClient(RUNPOD_ENDPOINT_ID)
@@ -195,6 +227,7 @@ setup_env = PythonOperator(
 train_model = PythonOperator(
     task_id='train_yolov8_model',
     python_callable=train_yolov8_model,
+    execution_timeout=timedelta(hours=4), 
     dag=dag,
     # Un retry re-dispara el job en RunPod y duplica la facturación: si el
     # job falla o expira, poll_job ya lo cancela. No reintentar.
