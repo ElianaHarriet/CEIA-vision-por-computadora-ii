@@ -18,7 +18,6 @@ on:
   push:
     branches:
       - main
-      - feat/multi-user-docker-workflow
     paths:
       # Estos son exactamente los archivos que runpod_handler/handler.py
       # importa (directa o transitivamente) de airflow/dags/training/ y que

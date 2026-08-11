@@ -134,15 +134,19 @@ class RunPodClient:
         print(f"✓ RunPod job submitted: {job_id}")
         return job_id
 
-    def get_status(self, job_id: str) -> dict:
-        """Get the current status of a job with retry logic."""
+    def get_status(self, job_id: str, timeout_s: float = 60) -> dict:
+        """Get the current status of a job, retrying transient API errors.
+        
+        Uses the session with automatic retry for HTTP-level errors, plus
+        manual retry with exponential backoff for transient network issues.
+        """
         url = f"{RUNPOD_API_BASE}/{self.endpoint_id}/status/{job_id}"
         
         # Retry with exponential backoff for transient network issues
         max_retries = 3
         for attempt in range(max_retries):
             try:
-                response = self._session.get(url, headers=self._headers(), timeout=60)
+                response = self._session.get(url, headers=self._headers(), timeout=timeout_s)
                 response.raise_for_status()
                 return response.json()
             except requests.exceptions.RequestException as e:

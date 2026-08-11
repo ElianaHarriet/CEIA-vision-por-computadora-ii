@@ -76,6 +76,13 @@ x-airflow-common: &airflow-common
     YOLO_BATCH_SIZE: ${YOLO_BATCH_SIZE:-16}
     YOLO_PATIENCE: ${YOLO_PATIENCE:-10}
     YOLO_CONF: ${YOLO_CONF:-0.4}
+    UNET_ENCODER: ${UNET_ENCODER:-resnet50}
+    UNET_ENCODER_WEIGHTS: ${UNET_ENCODER_WEIGHTS:-imagenet}
+    UNET_EPOCHS: ${UNET_EPOCHS:-60}
+    UNET_IMG_SIZE: ${UNET_IMG_SIZE:-640}
+    UNET_BATCH_SIZE: ${UNET_BATCH_SIZE:-8}
+    UNET_LR: ${UNET_LR:-0.0001}
+    UNET_PATIENCE: ${UNET_PATIENCE:-10}
   volumes:
     - ${AIRFLOW_PROJ_DIR:-./airflow}/dags:/opt/airflow/dags
     - ${AIRFLOW_PROJ_DIR:-./airflow}/logs:/opt/airflow/logs
