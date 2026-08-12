@@ -29,6 +29,7 @@ x-airflow-common: &airflow-common
   image: ${AIRFLOW_IMAGE_NAME:-extending_airflow:minimal}
   profiles:
     - airflow
+    - local
     - all
   dns:
     - 8.8.8.8
@@ -50,10 +51,11 @@ x-airflow-common: &airflow-common
     AIRFLOW__WEBSERVER__EXPOSE_CONFIG: 'True'
     AIRFLOW__SECRETS__BACKEND: airflow.secrets.local_filesystem.LocalFilesystemBackend
     AIRFLOW__SECRETS__BACKEND_KWARGS: '{"variables_file_path": "/opt/secrets/variables.yaml", "connections_file_path": "/opt/secrets/connections.yaml"}'
-    AWS_ACCESS_KEY_ID: ${MINIO_ACCESS_KEY:-minio}
-    AWS_SECRET_ACCESS_KEY: ${MINIO_SECRET_ACCESS_KEY:-minio123}
-    AWS_ENDPOINT_URL_S3: http://s3:9000
-    MLFLOW_S3_ENDPOINT_URL: http://s3:9000
+    AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-minio}
+    AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-minio123}
+    AWS_ENDPOINT_URL_S3: ${AWS_ENDPOINT_URL:-http://s3:9000}
+    MLFLOW_TRACKING_URI: ${MLFLOW_TRACKING_URI:-http://mlflow:5000}
+    MLFLOW_S3_ENDPOINT_URL: ${MLFLOW_S3_ENDPOINT_URL:-http://s3:9000}
     ROBOFLOW_API_KEY: ${ROBOFLOW_API_KEY}
     ROBOFLOW_WORKSPACE: ${ROBOFLOW_WORKSPACE}
     ROBOFLOW_PROJECT: ${ROBOFLOW_PROJECT}
@@ -109,7 +111,9 @@ services:
     container_name: postgres
     profiles:
       - airflow
+      - local
       - mlflow
+      - infrastructure
       - all
     ports:
       - "${PG_PORT:-5432}:5432"
@@ -132,6 +136,10 @@ services:
 
   redis:
     image: valkey/valkey:8.1-bookworm
+    profiles:
+      - airflow
+      - local
+      - all
     expose:
       - 6379
     networks:
@@ -151,6 +159,8 @@ services:
     profiles:
       - mlflow
       - airflow
+      - local
+      - infrastructure
       - all
     ports:
       - "${MINIO_PORT:-9000}:9000"
@@ -176,6 +186,8 @@ services:
     profiles:
       - mlflow
       - airflow
+      - local
+      - infrastructure
       - all
     depends_on:
       - s3
@@ -197,6 +209,7 @@ services:
     container_name: mlflow
     profiles:
       - mlflow
+      - infrastructure
       - all
     depends_on:
       postgres:
