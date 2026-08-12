@@ -94,10 +94,10 @@ def train_yolov8_model(**context):
     """Entrenar YOLOv8-seg en RunPod y traer el modelo resultante a disco local."""
     import mlflow
     from training.runpod_client import RunPodClient
-    from training.tunnel_url import get_quick_tunnel_url
 
-    mlflow_public_uri = get_quick_tunnel_url(MLFLOW_TUNNEL_LOG)
-    s3_public_uri = get_quick_tunnel_url(S3_TUNNEL_LOG)
+    # Usar URLs directas desde .env (con DigitalOcean o localhost)
+    mlflow_public_uri = os.getenv("MLFLOW_TRACKING_URI", "http://localhost:5001")
+    s3_public_uri = os.getenv("AWS_ENDPOINT_URL", "http://localhost:9000")
 
     # Get MinIO credentials from environment (required)
     # Docker Compose maps these as AWS_* variables

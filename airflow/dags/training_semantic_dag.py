@@ -22,6 +22,7 @@ if str(dags_path) not in sys.path:
 
 from training.config import TrainingConfig, UNetConfig
 from training.validators import SemanticDataValidator
+from training.profile_config import RunPodProfileConfig
 
 # DAG configuration
 default_args = {
@@ -52,9 +53,7 @@ MODEL_NAME = TrainingConfig.get_semantic_model_name()
 # RunPod / dataset upload configuration
 DATA_BUCKET = os.getenv("DATA_REPO_BUCKET_NAME", "data")
 DATASET_S3_PREFIX = "semantic"
-RUNPOD_ENDPOINT_ID = os.getenv("RUNPOD_ENDPOINT_ID")
-MLFLOW_TUNNEL_LOG = "/var/log/cloudflared/mlflow.log"
-S3_TUNNEL_LOG = "/var/log/cloudflared/s3.log"
+RUNPOD_ENDPOINT_ID = RunPodProfileConfig.get_endpoint_id()
 
 
 def check_data_availability(**context):
@@ -80,7 +79,7 @@ def setup_training_environment(**context):
     RunPodClient(RUNPOD_ENDPOINT_ID).check_balance()
     mlflow.set_tracking_uri(MLFLOW_URI)
     mlflow.set_experiment(EXPERIMENT_NAME)
-    print(f"✓ RunPod endpoint configurado: {RUNPOD_ENDPOINT_ID}")
+    RunPodProfileConfig.print_active_config()
     print(f"✓ MLflow: {MLFLOW_URI}")
     return {"runpod_endpoint_id": RUNPOD_ENDPOINT_ID}
 
@@ -111,10 +110,19 @@ def create_dataloaders(**context):
 def train_unet_model(**context):
     """Entrenar U-Net en RunPod y esperar el resultado."""
     from training.runpod_client import RunPodClient
-    from training.tunnel_url import get_quick_tunnel_url
 
-    mlflow_public_uri = get_quick_tunnel_url(MLFLOW_TUNNEL_LOG)
-    s3_public_uri = get_quick_tunnel_url(S3_TUNNEL_LOG)
+    # Usar URLs directas desde .env (con DigitalOcean o localhost)
+    mlflow_public_uri = os.getenv("MLFLOW_TRACKING_URI", "http://localhost:5001")
+    s3_public_uri = os.getenv("AWS_ENDPOINT_URL", "http://localhost:9000")
+
+    # Get MinIO credentials from environment (required)
+    s3_access_key = os.getenv("AWS_ACCESS_KEY_ID")
+    s3_secret_key = os.getenv("AWS_SECRET_ACCESS_KEY")
+    
+    if not s3_access_key or not s3_secret_key:
+        raise ValueError(
+            "AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY must be set (check docker-compose.yaml)"
+        )
 
     config_overrides = {
         "ENCODER": UNetConfig.ENCODER,
@@ -131,6 +139,8 @@ def train_unet_model(**context):
         "dataset_s3_prefix": DATASET_S3_PREFIX,
         "dataset_bucket": DATA_BUCKET,
         "s3_endpoint_url": s3_public_uri,
+        "s3_access_key": s3_access_key,
+        "s3_secret_key": s3_secret_key,
         "mlflow_uri": mlflow_public_uri,
         "experiment_name": EXPERIMENT_NAME,
         "run_name_prefix": "unet",
