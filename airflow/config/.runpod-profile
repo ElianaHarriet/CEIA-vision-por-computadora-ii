@@ -1,0 +1,6 @@
+# RunPod Profile Configuration
+# Este archivo se versiona en git y determina qué perfil usar
+# tanto localmente (Airflow) como en GitHub Actions (CI/CD)
+#
+# Valores permitidos: luis | santiago
+RUNPOD_PROFILE=luis

@@ -49,12 +49,14 @@ class TrainingConfig:
 class YOLOConfig:
     """Configuration for YOLO training (overridable via env vars)."""
 
-    MODEL = os.getenv("YOLO_MODEL", "yolov8s-seg.pt")
-    EPOCHS = int(os.getenv("YOLO_EPOCHS", "100"))
+    # Valores inyectados por docker-compose.yaml desde .env o sus defaults
+    # Si no están definidos (ej: en RunPod), usar valores por defecto razonables
+    MODEL = os.getenv("YOLO_MODEL", "yolov8x-seg.pt")
+    EPOCHS = int(os.getenv("YOLO_EPOCHS", "150"))
     IMG_SIZE = int(os.getenv("YOLO_IMG_SIZE", "640"))
     BATCH_SIZE = int(os.getenv("YOLO_BATCH_SIZE", "16"))
     DEVICE = 0
-    PATIENCE = int(os.getenv("YOLO_PATIENCE", "10"))
+    PATIENCE = int(os.getenv("YOLO_PATIENCE", "20"))
     SEED = int(os.getenv("YOLO_SEED", "2026"))
 
 

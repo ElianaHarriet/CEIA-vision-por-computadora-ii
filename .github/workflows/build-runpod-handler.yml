@@ -7,6 +7,14 @@ on:
         description: "Tag para la imagen (además de 'latest')"
         required: false
         default: "latest"
+      profile:
+        description: "Perfil RunPod a usar (luis o santiago)"
+        required: true
+        default: "santiago"
+        type: choice
+        options:
+          - luis
+          - santiago
   push:
     branches:
       - main
@@ -31,6 +39,41 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Configurar variables según el usuario
+        run: |
+          # Leer el perfil desde airflow/config/.runpod-profile (versionado en git)
+          if [ -f "airflow/config/.runpod-profile" ]; then
+            PROFILE=$(grep "^RUNPOD_PROFILE=" airflow/config/.runpod-profile | cut -d'=' -f2 | tr -d ' ')
+            echo "🎯 Perfil leído desde airflow/config/.runpod-profile: $PROFILE"
+          elif [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            # Fallback: input manual si se ejecuta manualmente
+            PROFILE="${{ github.event.inputs.profile }}"
+            echo "🎯 Perfil seleccionado manualmente: $PROFILE"
+          else
+            # Fallback: detección por github.actor
+            if [ "${{ github.actor }}" = "LuisAli22" ]; then
+              PROFILE="luis"
+            else
+              PROFILE="santiago"
+            fi
+            echo "🤖 Perfil auto-detectado por actor: $PROFILE (actor: ${{ github.actor }})"
+          fi
+          
+          # Configurar variables según el perfil
+          if [ "$PROFILE" = "luis" ]; then
+            echo "DOCKER_USERNAME=${{ secrets.DOCKERHUB_USERNAME_LUIS }}" >> $GITHUB_ENV
+            echo "DOCKER_TOKEN=${{ secrets.DOCKERHUB_TOKEN_LUIS }}" >> $GITHUB_ENV
+            echo "RUNPOD_ENDPOINT_ID=${{ vars.RUNPOD_ENDPOINT_ID_LUIS }}" >> $GITHUB_ENV
+            echo "RUNPOD_API_KEY=${{ secrets.RUNPOD_API_KEY_LUIS }}" >> $GITHUB_ENV
+            echo "✓ Usando credentials de Luis (Docker Hub: lali22)"
+          else
+            echo "DOCKER_USERNAME=${{ secrets.DOCKERHUB_USERNAME }}" >> $GITHUB_ENV
+            echo "DOCKER_TOKEN=${{ secrets.DOCKERHUB_TOKEN }}" >> $GITHUB_ENV
+            echo "RUNPOD_ENDPOINT_ID=${{ vars.RUNPOD_ENDPOINT_ID_SANTIAGO }}" >> $GITHUB_ENV
+            echo "RUNPOD_API_KEY=${{ secrets.RUNPOD_API_KEY }}" >> $GITHUB_ENV
+            echo "✓ Usando credentials de Santiago"
+          fi
+
       - name: Free disk space
         run: |
           sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
@@ -39,8 +82,8 @@ jobs:
 
       - uses: docker/login-action@v3
         with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          username: ${{ env.DOCKER_USERNAME }}
+          password: ${{ env.DOCKER_TOKEN }}
 
       - uses: docker/setup-buildx-action@v3
 
@@ -53,8 +96,8 @@ jobs:
           docker buildx build \
             --platform linux/amd64 \
             --file runpod_handler/Dockerfile \
-            --tag ${{ secrets.DOCKERHUB_USERNAME }}/runpod-training-handler:latest \
-            --tag ${{ secrets.DOCKERHUB_USERNAME }}/runpod-training-handler:${{ github.sha }} \
+            --tag ${{ env.DOCKER_USERNAME }}/runpod-training-handler:latest \
+            --tag ${{ env.DOCKER_USERNAME }}/runpod-training-handler:${{ github.sha }} \
             --push \
             .
 
@@ -66,9 +109,9 @@ jobs:
       # .github/workflows/scripts/update_runpod_image.py.
       - name: Point RunPod endpoint at the new image
         env:
-          RUNPOD_API_KEY: ${{ secrets.RUNPOD_API_KEY }}
-          RUNPOD_ENDPOINT_ID: ${{ vars.RUNPOD_ENDPOINT_ID }}
+          RUNPOD_API_KEY: ${{ env.RUNPOD_API_KEY }}
+          RUNPOD_ENDPOINT_ID: ${{ env.RUNPOD_ENDPOINT_ID }}
         run: |
           python3 .github/workflows/scripts/update_runpod_image.py \
-            "${{ secrets.DOCKERHUB_USERNAME }}/runpod-training-handler:${{ github.sha }}" \
+            "${{ env.DOCKER_USERNAME }}/runpod-training-handler:${{ github.sha }}" \
             --apply
