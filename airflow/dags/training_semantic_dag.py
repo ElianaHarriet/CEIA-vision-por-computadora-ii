@@ -220,19 +220,20 @@ train_model = PythonOperator(
     retries=0,
 )
 
-register_model = PythonOperator(
-    task_id='register_model_in_registry',
-    python_callable=register_model_in_registry,
-    dag=dag,
-)
+# register_model = PythonOperator(
+#     task_id='register_model_in_registry',
+#     python_callable=register_model_in_registry,
+#     dag=dag,
+# )
 
-validate_model = PythonOperator(
-    task_id='validate_trained_model',
-    python_callable=validate_trained_model,
-    dag=dag,
-)
+# validate_model = PythonOperator(
+#     task_id='validate_trained_model',
+#     python_callable=validate_trained_model,
+#     dag=dag,
+# )
 
 # Define dependencies
+# Validación local desactivada: ya se validó en RunPod con GPU
 deps = [check_data, upload_dataset, setup_env, prepare_loaders]
-deps += [train_model, register_model, validate_model]
-deps[0] >> deps[1] >> deps[2] >> deps[3] >> deps[4] >> deps[5] >> deps[6]
+deps += [train_model, register_model]
+deps[0] >> deps[1] >> deps[2] >> deps[3] >> deps[4] >> deps[5]

@@ -53,6 +53,7 @@ x-airflow-common: &airflow-common
     AIRFLOW__SECRETS__BACKEND_KWARGS: '{"variables_file_path": "/opt/secrets/variables.yaml", "connections_file_path": "/opt/secrets/connections.yaml"}'
     AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-minio}
     AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-minio123}
+    AWS_ENDPOINT_URL: ${AWS_ENDPOINT_URL:-http://s3:9000}
     AWS_ENDPOINT_URL_S3: ${AWS_ENDPOINT_URL:-http://s3:9000}
     MLFLOW_TRACKING_URI: ${MLFLOW_TRACKING_URI:-http://mlflow:5000}
     MLFLOW_S3_ENDPOINT_URL: ${MLFLOW_S3_ENDPOINT_URL:-http://s3:9000}
