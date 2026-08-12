@@ -123,7 +123,12 @@ def _train_unet(job_input: dict, mlflow_mgr: MLflowManager) -> dict:
         DATASET_DIR,
     )
     config = _build_config(UNetConfig, job_input.get("config_overrides"))
-    factory = DataLoaderFactory(DATASET_DIR, config.IMG_SIZE, config.BATCH_SIZE)
+    factory = DataLoaderFactory(
+        DATASET_DIR,
+        config.IMG_SIZE,
+        config.BATCH_SIZE,
+        seed=getattr(config, "SEED", 2026),
+    )
     train_loader, valid_loader, _ = factory.create_loaders()
 
     with mlflow_mgr.start_run(job_input.get("run_name_prefix", "unet")) as run:

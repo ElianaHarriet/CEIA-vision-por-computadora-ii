@@ -1,5 +1,6 @@
 """DataLoader factory for semantic segmentation."""
 from pathlib import Path
+import torch
 from torch.utils.data import DataLoader
 from training.datasets import SemanticSegmentationDataset
 from training.datasets import TransformFactory
@@ -8,11 +9,13 @@ from training.datasets import TransformFactory
 class DataLoaderFactory:
     """Factory for creating DataLoaders."""
 
-    def __init__(self, data_path: str, img_size: tuple, batch_size: int):
+    def __init__(self, data_path: str, img_size: tuple, batch_size: int,
+                 seed: int = 2026):
         """Initialize factory."""
         self.data_path = Path(data_path)
         self.img_size = img_size
         self.batch_size = batch_size
+        self.seed = seed
 
     def create_loaders(self):
         """Create train, valid, test loaders."""
@@ -22,14 +25,27 @@ class DataLoaderFactory:
         self._print_info(train_loader, valid_loader, test_loader)
         return train_loader, valid_loader, test_loader
 
+    def _worker_init_fn(self, worker_id):
+        """Seed each DataLoader worker for reproducible sampling."""
+        torch.manual_seed(self.seed + worker_id)
+        if torch.cuda.is_available():
+            torch.cuda.manual_seed_all(self.seed + worker_id)
+
     def _create_train_loader(self):
-        """Create training DataLoader."""
+        """Create training DataLoader.
+
+        shuffle=True with a fixed ``generator`` makes the batch order
+        reproducible across runs (and workers, via ``worker_init_fn``),
+        independent of when the global RNG was last seeded.
+        """
         dataset = self._create_train_dataset()
         return DataLoader(
             dataset,
             batch_size=self.batch_size,
             shuffle=True,
-            num_workers=2
+            num_workers=2,
+            generator=torch.Generator().manual_seed(self.seed),
+            worker_init_fn=self._worker_init_fn,
         )
 
     def _create_valid_loader(self):

@@ -56,7 +56,7 @@ class UNetTrainer:
 
     def _seed_everything(self):
         """Fix RNG seeds so training is reproducible."""
-        seed = getattr(self.config, "SEED", 42)
+        seed = getattr(self.config, "SEED", 2026)
         random.seed(seed)
         np.random.seed(seed)
         torch.manual_seed(seed)
@@ -123,7 +123,7 @@ class UNetTrainer:
             "num_classes": self.config.NUM_CLASSES,
             "img_size": self.config.IMG_SIZE,
             "device": str(self.device),
-            "seed": getattr(self.config, "SEED", 42),
+            "seed": getattr(self.config, "SEED", 2026),
         }
 
     def _run_training_loop(self, train_loader, valid_loader):

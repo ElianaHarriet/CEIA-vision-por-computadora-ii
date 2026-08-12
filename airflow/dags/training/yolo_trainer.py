@@ -29,7 +29,7 @@ class YOLOTrainer:
 
     def _seed_everything(self):
         """Fix RNG seeds so training is reproducible."""
-        seed = getattr(self.config, "SEED", 42)
+        seed = getattr(self.config, "SEED", 2026)
         random.seed(seed)
         np.random.seed(seed)
         torch.manual_seed(seed)
@@ -58,7 +58,7 @@ class YOLOTrainer:
             "device": self._get_device(),
             "dataset": "car-damages-instance",
             "num_classes": 4,
-            "seed": getattr(self.config, "SEED", 42),
+            "seed": getattr(self.config, "SEED", 2026),
         }
 
     def _get_device(self):
@@ -78,7 +78,7 @@ class YOLOTrainer:
             project='/opt/airflow/runs/segment',
             verbose=True,
             patience=self.config.PATIENCE,
-            seed=getattr(self.config, "SEED", 42),
+            seed=getattr(self.config, "SEED", 2026),
             deterministic=True,
             save=True,
             plots=True
