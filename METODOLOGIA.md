@@ -269,12 +269,20 @@ Métricas binarias de daño (máscara daño vs no-daño, referencia de la Opció
 > YOLOv8-seg por +0.14. El modelo instance solo supera levemente en Dent
 > y No Damage.
 
-**Análisis estadístico (bootstrap, 1000 resamples, seed=2026):**
-- t-test (paired sobre IoU por imagen): p = 0.7056 → **no significativo**
-- IoU Instance: 95% CI [0.5838, 0.6856]
-- IoU Semantic: 95% CI [0.5682, 0.6730]
-- Diferencia: 95% CI [-0.0549, 0.0834] → **contiene 0**, el gap no es
+**Análisis estadístico (paired bootstrap, 1000 resamples, seed=2026):**
+- **Subset común**: 108 imágenes evaluadas por ambos modelos (instance
+  108, semantic 119). Las 11 imágenes excluidas de instance son daños
+  que YOLO **no detectó** (falsos negativos de detección) y que la
+  máscara GT sí contiene; no son imágenes sin daño.
+- Paired t-test (sobre el subset común): p = 0.6564 → **no significativo**
+- IoU Instance (common): 95% CI [0.5818, 0.6857]
+- IoU Semantic (common): 95% CI [0.5920, 0.6963]
+- Diferencia: 95% CI [-0.0521, 0.0334] → **contiene 0**, el gap no es
   estadísticamente significativo
+
+> El test es pareado: se comparan los IoU por imagen de las 108 imágenes
+> evaluadas por ambos modelos, eliminando el sesgo de selección de
+> poblaciones de distinto tamaño (108 vs 119).
 
 **Veredicto preliminar:** ambos modelos son estadísticamente
 indistinguibles en IoU de daño. La ventaja práctica de U-Net aparece en
@@ -308,8 +316,9 @@ sustancialmente más precisa.
 - Análisis cualitativo de contornos
 
 **Resultado de la validación (Final):**
-- IoU de daño: instance  0.6342 > semantic 0.6200, pero p = 0.7056 y el
-  CI de la diferencia [-0.0549, 0.0834] contiene 0 → **no significativo**.
+- IoU de daño: instance  0.6342 > semantic 0.6200, pero p = 0.6564 (paired
+  sobre 108 imágenes comunes) y el CI de la diferencia [-0.0521, 0.0334]
+  contiene 0 → **no significativo**.
 - Error de área relativo: semantic 45.01% < instance 62.77%.
 - El modelo semantic genera **máscaras multiclase** con contornos más
   confiables que el flattening de instancias, no solo en área sino también
@@ -515,18 +524,18 @@ model.save('models/yolov8_instance.pt')
 
 ### Fase 3: Entrenamiento Modelo Semantic
 
-**Arquitectura recomendada:** U-Net, DeepLab v3+, o PSPNet
+**Arquitectura recomendada:** U-Net con encoder ResNet (default resnet50), DeepLab v3+, o PSPNet
 
 ```python
 import segmentation_models_pytorch as smp
 import mlflow
 
-# Definir modelo
+# Definir modelo (label space compartido: 0=Background + 4 clases de daño)
 model = smp.Unet(
-    encoder_name="resnet34",
+    encoder_name="resnet50",
     encoder_weights="imagenet",
     in_channels=3,
-    classes=4  # 4 clases de daño
+    classes=5  # Background + Dent + Scratch + No Damage + Severe
 )
 
 # Entrenar (pseudocódigo)

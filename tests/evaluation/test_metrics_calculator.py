@@ -150,6 +150,77 @@ class TestAllMetricsPipeline:
         assert result["aggregated"]["mean_iou"] == 1.0
 
 
+class TestSanitizeMask:
+    def test_nan_treated_as_background(self):
+        gt = np.zeros((10, 10), dtype=np.uint8)
+        gt[2:4, 2:4] = 1
+        pred = np.full((10, 10), np.nan)
+        calc = MetricsCalculator(num_classes=5)
+        sanitized = calc._sanitize_mask(pred)
+        assert sanitized.sum() == 0
+        assert calc._calculate_iou(sanitized, gt) == 0.0
+
+    def test_out_of_range_values_are_clipped(self):
+        pred = np.full((10, 10), 255, dtype=np.float32)
+        calc = MetricsCalculator(num_classes=5)
+        sanitized = calc._sanitize_mask(pred)
+        assert sanitized.max() == 4
+        # Clipped to Severe (4) -> still damage, but no crash / overflow.
+        assert calc._binary_precision(sanitized, sanitized) == 1.0
+
+    def test_sanitize_applied_in_pipeline(self):
+        gt = np.zeros((10, 10), dtype=np.uint8)
+        gt[2:4, 2:4] = 4
+        pred = np.full((10, 10), 0.0, dtype=np.float32)
+        pred[2:4, 2:4] = 255.0  # stray model output -> must be clipped to 4
+        calc = MetricsCalculator(num_classes=5)
+        result = calc.calculate_all_metrics({"img": pred}, {"img": gt})
+        assert result["aggregated"]["mean_binary_precision"] == 1.0
+        assert result["aggregated"]["mean_iou"] == 1.0
+
+
+class TestAggregatePerClass:
+    def test_absent_class_aggregates_to_one(self, calculator):
+        """A class never seen across the test set scores 1.0 (matches
+        the per-image convention), not 0.0."""
+        per_image = {}
+        for i in range(3):
+            gt = np.zeros((10, 10), dtype=np.uint8)
+            gt[0:5, 0:10] = 4
+            pred = np.full((10, 10), 3, dtype=np.uint8)
+            pred[0:5, 0:5] = 4
+            per_image[f"img_{i}"] = _single_per_image(gt, pred)
+        agg = calculator._aggregate_per_class_iou(per_image)
+        assert agg["iou"]["1"] == 1.0
+        assert agg["iou"]["2"] == 1.0
+
+    def test_mixed_no_damage_and_damage_images(self):
+        """An aggregate over no-damage + damage images must not collapse
+        the no-damage IoU=1.0 into a misleading mean."""
+        calc = MetricsCalculator(num_classes=5)
+        gt_damage = np.zeros((10, 10), dtype=np.uint8)
+        gt_damage[0:5, 0:10] = 4
+        pred_damage = np.full((10, 10), 3, dtype=np.uint8)
+        pred_damage[0:5, 0:5] = 4
+        gt_none = np.zeros((10, 10), dtype=np.uint8)
+        pred_none = np.zeros((10, 10), dtype=np.uint8)
+        per_image = {
+            "dmg": _single_per_image(gt_damage, pred_damage),
+            "none": _single_per_image(gt_none, pred_none),
+        }
+        result = calc.calculate_all_metrics(
+            {"dmg": pred_damage, "none": pred_none},
+            {"dmg": gt_damage, "none": gt_none},
+        )
+        assert result["aggregated"]["mean_iou"] == 0.75  # (0.5 + 1.0)/2
+
+    def test_empty_per_image_returns_empty(self):
+        calc = MetricsCalculator(num_classes=5)
+        assert calc._aggregate_metrics({}) == {}
+        result = calc.calculate_all_metrics({}, {})
+        assert result["aggregated"] == {}
+
+
 class TestComparisonPerClass:
     def test_comparison_has_per_class_delta(self):
         gt = np.zeros((10, 10), dtype=np.uint8)
@@ -163,3 +234,16 @@ class TestComparisonPerClass:
         assert "per_class_iou" in comp
         assert "0" in comp["per_class_iou"]
         assert comp["per_class_iou"]["0"]["difference"] == 0.0
+
+    def test_comparison_union_of_per_class_keys(self):
+        """compare_metrics must merge keys present in only one model."""
+        calc = MetricsCalculator(num_classes=5)
+        gt = np.zeros((10, 10), dtype=np.uint8)
+        pred = np.zeros((10, 10), dtype=np.uint8)
+        metrics_a = calc.calculate_all_metrics({"img": pred}, {"img": gt})
+        metrics_b = calc.calculate_all_metrics({"img": pred}, {"img": gt})
+        # Simulate a model evaluated with a different class set.
+        metrics_a["aggregated"]["per_class_iou"]["iou"]["99"] = 0.5
+        comp = ComparisonCalculator().compare_metrics(metrics_a, metrics_b)
+        assert "99" in comp["per_class_iou"]
+        assert comp["per_class_iou"]["99"]["model_b"] == 0.0

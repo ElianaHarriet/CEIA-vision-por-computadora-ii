@@ -30,6 +30,9 @@ def _hypothesis():
         "ci_iou_instance": (0.4, 0.6),
         "ci_iou_semantic": (0.39, 0.59),
         "ci_difference": (-0.15, 0.17),
+        "n_images_common": 108,
+        "n_images_instance": 108,
+        "n_images_semantic": 119,
     }
 
 
@@ -62,6 +65,53 @@ class TestReportGenerator:
         report_lines = report._build_report(_data())
         assert "Binary Damage" in report_lines
         assert "Binary F1" in report_lines
+        assert "Binary Precision" in report_lines
+
+    def test_report_labels_macro_and_binary_separately(self, tmp_path):
+        """Macro (5-class) metrics must NOT be presented as binary."""
+        report = ComparisonReport(str(tmp_path),
+                                  class_names=["Bg", "Dent", "Scratch",
+                                               "No", "Severe"])
+        data = _data()
+        data["comparison"]["mean_precision"] = {
+            "model_a": 0.32, "model_b": 0.33,
+            "difference": -0.01, "relative_diff": -2.5,
+        }
+        report_lines = report._build_report(data)
+        # The macro precision must be labeled as such, not as a binary row.
+        assert "Precision (macro, 5 clases)" in report_lines
+
+    def test_report_mentions_common_subset(self, tmp_path):
+        report = ComparisonReport(str(tmp_path),
+                                  class_names=["Bg", "Dent", "Scratch",
+                                               "No", "Severe"])
+        report_lines = report._build_report(_data())
+        assert "Common subset" in report_lines
+        assert "108" in report_lines
+
+    def test_report_handles_missing_per_class(self, tmp_path):
+        report = ComparisonReport(str(tmp_path),
+                                  class_names=["Bg", "Dent", "Scratch",
+                                               "No", "Severe"])
+        data = _data()
+        data["comparison"] = {
+            "mean_iou": {"model_a": 0.5, "model_b": 0.4,
+                         "difference": 0.1, "relative_diff": 25.0},
+            "mean_relative_area_error": {"model_a": 0.6, "model_b": 0.4,
+                                         "difference": 0.2, "relative_diff": 50.0},
+        }
+        report_lines = report._build_report(data)
+        assert "No data." in report_lines
+
+    def test_report_handles_missing_ci(self, tmp_path):
+        report = ComparisonReport(str(tmp_path),
+                                  class_names=["Bg", "Dent", "Scratch",
+                                               "No", "Severe"])
+        data = _data()
+        data["hypothesis"] = {"validated": False, "evidence": "",
+                              "conclusion": ""}
+        report_lines = report._build_report(data)
+        assert "Not computed." in report_lines
 
     def test_generate_report_writes_files(self, tmp_path):
         report = ComparisonReport(str(tmp_path),
