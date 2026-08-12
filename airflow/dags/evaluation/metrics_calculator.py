@@ -43,6 +43,8 @@ class MetricsCalculator:
 
     def _calculate_single(self, pred, gt):
         """Calculate metrics for single image."""
+        pred = self._sanitize_mask(pred)
+        gt = self._sanitize_mask(gt)
         return {
             'iou_global': self._calculate_iou(pred, gt),
             'iou_per_class': self._calculate_iou_per_class(pred, gt),
@@ -57,6 +59,18 @@ class MetricsCalculator:
             'area_error': self._calculate_area_error(pred, gt),
             'relative_area_error': self._calculate_relative_area_error(pred, gt),
         }
+
+    def _sanitize_mask(self, mask):
+        """Normalize a mask so downstream metrics are well-defined.
+
+        - NaN pixels are treated as background (0).
+        - Values outside [0, num_classes-1] are clipped, so a stray
+          value (e.g. 255) is not silently counted as damage.
+        """
+        mask = np.asarray(mask, dtype=np.float32)
+        mask = np.nan_to_num(mask, nan=0.0)
+        mask = np.clip(mask, 0, self.num_classes - 1)
+        return mask.astype(np.uint8)
 
     def _calculate_confusion(self, pred, gt):
         """Per-class confusion counts: [tp, fp, fn]."""
@@ -100,9 +114,9 @@ class MetricsCalculator:
     def _damage_mask(mask):
         """Binarize to damage pixels per the binary comparison option.
 
-        Classes 0, 1, 3 (Dent, Scratch, Severe) count as damage; class 2
-        (No Damage) is treated as background. Semantic masks use value =
-        YOLO class + 1, so damage == {1, 2, 4}.
+        In the shared 5-class label space (0=Background, 1=Dent,
+        2=Scratch, 3=No Damage, 4=Severe) only classes 1, 2, 4 count as
+        damage; No Damage (3) is treated as background.
         """
         return (mask >= 1) & (mask != 3)
 
@@ -235,7 +249,10 @@ class MetricsCalculator:
         ious = {}
         for cls in range(self.num_classes):
             denom = tp[cls] + fp[cls] + fn[cls]
-            ious[str(cls)] = float(tp[cls] / denom) if denom > 0 else 0.0
+            # A class absent from every image scores 1.0, mirroring the
+            # per-image convention in _calculate_iou_per_class (a class no
+            # side claims is a correct "not present" prediction, not a miss).
+            ious[str(cls)] = float(tp[cls] / denom) if denom > 0 else 1.0
         return {
             'iou': ious,
             'n_images_with_class': present,
