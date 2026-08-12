@@ -363,10 +363,11 @@ def log_comparison_to_mlflow(**context):
         _log_params_to_mlflow(model_info)
         _log_artifacts_to_mlflow(viz_path, report_path)
         mlflow.log_param('hypothesis_validated', hypothesis['validated'])
+        mlflow.log_param('n_images_common', hypothesis.get('n_images_common', 0))
         mlflow.log_metric('p_value', hypothesis['p_value'])
         ci = hypothesis.get('ci_difference')
         if ci is not None:
-            mlflow.log_params({
+            mlflow.log_metrics({
                 'ci_iou_instance_low': hypothesis['ci_iou_instance'][0],
                 'ci_iou_instance_high': hypothesis['ci_iou_instance'][1],
                 'ci_iou_semantic_low': hypothesis['ci_iou_semantic'][0],
