@@ -57,6 +57,7 @@ class YOLOConfig:
     BATCH_SIZE = int(os.getenv("YOLO_BATCH_SIZE", "16"))
     DEVICE = 0
     PATIENCE = int(os.getenv("YOLO_PATIENCE", "20"))
+    SEED = int(os.getenv("YOLO_SEED", "2026"))
 
 
 class UNetConfig:
@@ -73,6 +74,7 @@ class UNetConfig:
     LEARNING_RATE = float(os.getenv("UNET_LR", "1e-4"))
     IMG_SIZE = (int(os.getenv("UNET_IMG_SIZE", "640")),) * 2
     PATIENCE = int(os.getenv("UNET_PATIENCE", "10"))
+    SEED = int(os.getenv("UNET_SEED", "2026"))
     # sqrt(1/freq) por clase, normalizado a suma 1. Frecuencias de píxeles
     # (train): Background 80%, Dent 7%, Scratch 1.7%, NoDamage 3.6%, Severe 7%.
     # El fondo domina el Dice; estos pesos le quitan fuerza para que las clases

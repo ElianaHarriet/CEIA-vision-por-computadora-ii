@@ -1,5 +1,7 @@
 """YOLO trainer for instance segmentation."""
+import random
 import torch
+import numpy as np
 from pathlib import Path
 from ultralytics import YOLO
 from training.mlflow_manager import MLflowManager
@@ -18,11 +20,24 @@ class YOLOTrainer:
     def train(self, data_yaml: str):
         """Train YOLO model."""
         print(f"Training {self.config.MODEL}...")
+        self._seed_everything()
         self._load_model()
         self._log_hyperparams()
         self._run_training(data_yaml)
         self._extract_metrics()
         return self._get_results()
+
+    def _seed_everything(self):
+        """Fix RNG seeds so training is reproducible."""
+        seed = getattr(self.config, "SEED", 2026)
+        random.seed(seed)
+        np.random.seed(seed)
+        torch.manual_seed(seed)
+        if torch.cuda.is_available():
+            torch.cuda.manual_seed_all(seed)
+        torch.backends.cudnn.deterministic = True
+        torch.backends.cudnn.benchmark = False
+        print(f"✓ Seeded everything with SEED={seed}")
 
     def _load_model(self):
         """Load pretrained model."""
@@ -43,6 +58,7 @@ class YOLOTrainer:
             "device": self._get_device(),
             "dataset": "car-damages-instance",
             "num_classes": 4,
+            "seed": getattr(self.config, "SEED", 2026),
         }
 
     def _get_device(self):
@@ -62,6 +78,8 @@ class YOLOTrainer:
             project='/opt/airflow/runs/segment',
             verbose=True,
             patience=self.config.PATIENCE,
+            seed=getattr(self.config, "SEED", 2026),
+            deterministic=True,
             save=True,
             plots=True
         )

@@ -125,20 +125,21 @@ def train_yolov8_model(**context):
             "hsv_h": 0.02,       # Hue variation
             "hsv_s": 0.8,        # Saturation augmentation
             "hsv_v": 0.5,        # Brightness augmentation
-            
+
             # Data augmentation - Geometric
             "degrees": 15.0,     # Rotation range (degrees)
             "translate": 0.2,    # Translation (+/- fraction)
             "scale": 0.7,        # Scale range (gain)
             "shear": 5.0,        # Shear range (degrees)
-            
+
             # Data augmentation - Flips
             "flipud": 0.3,       # Vertical flip probability
             "fliplr": 0.5,       # Horizontal flip probability
-            
+
             # Advanced augmentation
             "mosaic": 1.0,       # Mosaic augmentation probability
             "mixup": 0.15,       # Mixup augmentation probability
+            "SEED": YOLOConfig.SEED,
         },
     }
 

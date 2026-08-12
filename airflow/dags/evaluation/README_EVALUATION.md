@@ -25,7 +25,8 @@ Configuración centralizada para evaluación.
 
 **Clase:**
 - `EvaluationConfig` - Paths, model names, stage, results path
-  - 4 clases predefinidas: Dent, Scratch, No Damage, Severe Damage
+  - 5 clases (label space compartido): Background, Dent, Scratch, No Damage, Severe
+  - `NUM_CLASSES = 5`; la clase No Damage se trata como fondo en las métricas binarias
 
 ### dataset_loader.py
 Carga de dataset de test con validación de disponibilidad.
@@ -73,11 +74,15 @@ Aplanamiento de máscaras instance a formato semantic.
 - `MaskFlattener` - Aplana múltiples instancias en una máscara
   - Estrategia 'or': OR lógico (cualquier pixel activo)
   - Estrategia 'confidence': Prioriza alta confianza
+  - Estrategia 'class_aware': Multiclass preservando la clase (usada en el DAG)
   - Estrategia 'last': Última instancia gana
 
-**Uso:**
+**Uso (estrategia del DAG):**
 ```python
-flattener = MaskFlattener(strategy='or')
+flattener = MaskFlattener(
+    strategy='class_aware',
+    class_map={0: 1, 1: 2, 2: 3, 3: 4},  # YOLO class -> semantic value
+)
 flattened = flattener.flatten_predictions(predictions)
 ```
 
@@ -86,20 +91,29 @@ Cálculo de métricas de segmentación.
 
 **Clases:**
 - `MetricsCalculator` - Métricas por imagen y agregadas
-  - IoU global
-  - IoU per class
-  - Pixel accuracy
-  - Precision, Recall, F1 (sklearn)
+  - IoU global (binario daño vs no-daño)
+  - IoU per class (micro-promedio)
+  - Binary precision/recall/F1 (Opción B, máscara daño vs no-daño)
+  - Precision/Recall/F1 (macro, 5 clases, sklearn)
+  - Pixel accuracy, area error
 - `ComparisonCalculator` - Comparación entre modelos
   - Diferencia absoluta
   - Diferencia relativa (%)
+  - Per-class IoU con delta por clase
+
+**Convenciones importantes:**
+- Una imagen sin daño (unión == 0) puntúa IoU = 1.0, no 0.0.
+- Una clase ausente puntúa IoU = 1.0 (per-image y agregada).
+- Las máscaras se sanitizan (NaN→0, valores fuera de rango→clip) antes
+  de calcular métricas.
 
 **Métricas:**
-- `mean_iou` - IoU promedio
-- `mean_pixel_accuracy` - Exactitud de pixels
-- `mean_precision` - Precisión promedio
-- `mean_recall` - Recall promedio
-- `mean_f1_score` - F1-Score promedio
+- `mean_iou` - IoU binario promedio
+- `mean_binary_*` - Precision/Recall/F1 sobre la máscara binaria de daño
+- `mean_precision` - Precisión macro (5 clases) promedio
+- `mean_recall` - Recall macro (5 clases) promedio
+- `mean_f1_score` - F1-Score macro (5 clases) promedio
+- `per_class_iou` - IoU micro-promedio por clase + n_images_with_class
 
 ### visualizer.py
 Generación de visualizaciones de comparación.
@@ -108,6 +122,7 @@ Generación de visualizaciones de comparación.
 - `ComparisonVisualizer` - Gráficos de comparación
   - `generate_metrics_comparison()` - Bar chart de métricas
   - `generate_iou_bar_chart()` - Comparación de IoU
+  - `generate_per_class_iou_chart()` - Bar chart grouped por clase
   - `generate_sample_predictions()` - Grid de predicciones
 
 **Visualizaciones:**
@@ -134,8 +149,11 @@ Validación estadística de la hipótesis del proyecto.
 
 **Clase:**
 - `HypothesisValidator` - Valida o refuta hipótesis
-  - Compara IoU de ambos modelos
-  - T-test para significancia estadística (p < 0.05)
+  - Compara IoU de ambos modelos sobre el **subset común** de imágenes
+  - Paired t-test para significancia estadística (p < 0.05)
+  - Bootstrap CI (95%, seed=2026, 1000 resamples) del IoU y la diferencia
+  - La hipótesis se valida solo si IoU_instance > IoU_semantic, p < 0.05
+    y el CI de la diferencia no contiene 0
   - Genera evidencia y conclusión
 
 **Hipótesis:**
@@ -190,12 +208,15 @@ unet_predictor = UNetPredictor(unet_model, device, (640, 640))
 yolo_preds = yolo_predictor.predict(test_images)
 unet_preds = unet_predictor.predict(test_images)
 
-# 4. Aplanar máscaras instance
-flattener = MaskFlattener(strategy='or')
+# 4. Aplanar máscaras instance (class_aware, label space 0-4 compartido)
+flattener = MaskFlattener(
+    strategy='class_aware',
+    class_map={0: 1, 1: 2, 2: 3, 3: 4},
+)
 yolo_flat = flattener.flatten_predictions(yolo_preds)
 
 # 5. Calcular métricas
-calculator = MetricsCalculator(num_classes=4)
+calculator = MetricsCalculator(num_classes=5)
 metrics_yolo = calculator.calculate_all_metrics(yolo_flat, gt_masks)
 metrics_unet = calculator.calculate_all_metrics(unet_preds, gt_masks)
 
@@ -245,12 +266,13 @@ def _flatten_or(self, masks):
     return result.astype(np.uint8)
 
 def _calculate_iou(self, pred, gt):
-    """Calculate global IoU."""
-    pred_bin = pred > 0
-    gt_bin = gt > 0
+    """Calculate global IoU on the binary damage mask."""
+    pred_bin = self._damage_mask(pred)
+    gt_bin = self._damage_mask(gt)
     intersection = np.logical_and(pred_bin, gt_bin).sum()
     union = np.logical_or(pred_bin, gt_bin).sum()
-    return float(intersection / union) if union > 0 else 0.0
+    # No-damage images score 1.0 (a correct miss, not a spurious 0).
+    return 1.0 if union == 0 else float(intersection / union)
 ```
 
 ## Outputs del DAG
@@ -258,6 +280,7 @@ def _calculate_iou(self, pred, gt):
 ### Visualizaciones
 - `metrics_comparison.png` - Bar chart de todas las métricas
 - `iou_comparison.png` - Comparación específica de IoU
+- `per_class_iou.png` - Bar chart grouped de IoU por clase
 - `sample_predictions.png` - Grid 4x5 con predicciones
 
 ### Reportes
@@ -265,10 +288,12 @@ def _calculate_iou(self, pred, gt):
 - `comparison_data.json` - Todos los datos en JSON
 
 ### MLflow
-- Métricas: `instance_*`, `semantic_*`, `diff_*`
-- Parámetros: run IDs, versiones de modelos
+- Métricas: `instance_*`, `semantic_*`, `diff_*`, per-class
+  `*_iou_class_*`, `p_value`, `ci_iou_instance_*`, `ci_iou_semantic_*`,
+  `ci_diff_*`
+- Parámetros: run IDs, versiones de modelos, `hypothesis_validated`,
+  `n_images_common`
 - Artifacts: visualizaciones, reportes, datos
-- Tag: `hypothesis_validated` (True/False)
 
 ## Próximos Pasos
 

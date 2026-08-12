@@ -18,6 +18,7 @@ class ComparisonVisualizer:
         print("Generating visualizations...")
         self._generate_metrics_comparison(data['comparison'])
         self._generate_iou_bar_chart(data['comparison'])
+        self._generate_per_class_iou_chart(data['comparison'])
         self._generate_sample_predictions(data['samples'])
         print(f"✓ Visualizations saved to {self.output_path}")
         return str(self.output_path)
@@ -67,12 +68,38 @@ class ComparisonVisualizer:
                 ha='center',
                 va='bottom'
             )
-        ax.set_ylabel('Mean IoU')
+        ax.set_ylabel('Mean IoU (binary damage)')
         ax.set_title('Mean IoU Comparison')
         ax.set_ylim([0, 1])
         ax.grid(True, alpha=0.3, axis='y')
         plt.tight_layout()
         path = self.output_path / 'iou_comparison.png'
+        plt.savefig(path, dpi=150)
+        plt.close()
+
+    def _generate_per_class_iou_chart(self, comparison: dict):
+        """Generate per-class IoU grouped bar chart."""
+        per_class = comparison.get('per_class_iou', {})
+        if not per_class:
+            return
+        class_names = self.class_names
+        n = len(class_names)
+        inst = [per_class.get(str(i), {}).get('model_a', 0.0) for i in range(n)]
+        sem = [per_class.get(str(i), {}).get('model_b', 0.0) for i in range(n)]
+        x = np.arange(n)
+        width = 0.35
+        fig, ax = plt.subplots(figsize=(12, 6))
+        ax.bar(x - width/2, inst, width, label='Instance', color='#2ecc71')
+        ax.bar(x + width/2, sem, width, label='Semantic', color='#3498db')
+        ax.set_ylabel('IoU')
+        ax.set_title('Per-Class IoU (micro-averaged)')
+        ax.set_xticks(x)
+        ax.set_xticklabels(class_names, rotation=20, ha='right')
+        ax.set_ylim([0, 1])
+        ax.legend()
+        ax.grid(True, alpha=0.3, axis='y')
+        plt.tight_layout()
+        path = self.output_path / 'per_class_iou.png'
         plt.savefig(path, dpi=150)
         plt.close()
 
@@ -94,17 +121,18 @@ class ComparisonVisualizer:
 
     def _plot_sample(self, axes, name, data):
         """Plot single sample."""
+        vmax = len(self.class_names) - 1
         axes[0].imshow(data['image'])
         axes[0].set_title(f'Original\n{name}')
         axes[0].axis('off')
-        axes[1].imshow(data['gt'], cmap='tab10', vmin=0, vmax=3)
+        axes[1].imshow(data['gt'], cmap='tab10', vmin=0, vmax=vmax)
         axes[1].set_title('Ground Truth')
         axes[1].axis('off')
-        axes[2].imshow(data['pred_instance'], cmap='tab10', vmin=0, vmax=3)
+        axes[2].imshow(data['pred_instance'], cmap='tab10', vmin=0, vmax=vmax)
         iou_inst = data.get('iou_instance', 0)
         axes[2].set_title(f'Instance (IoU: {iou_inst:.3f})')
         axes[2].axis('off')
-        axes[3].imshow(data['pred_semantic'], cmap='tab10', vmin=0, vmax=3)
+        axes[3].imshow(data['pred_semantic'], cmap='tab10', vmin=0, vmax=vmax)
         iou_sem = data.get('iou_semantic', 0)
         axes[3].set_title(f'Semantic (IoU: {iou_sem:.3f})')
         axes[3].axis('off')

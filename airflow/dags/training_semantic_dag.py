@@ -5,7 +5,7 @@ Este DAG sube el dataset a MinIO, dispara el entrenamiento en un endpoint de
 RunPod Serverless (GPU remota) y registra el experimento resultante en MLflow.
 
 Dataset: car-damages-ready/semantic/
-Arquitectura: U-Net con encoder ResNet34
+Arquitectura: U-Net con encoder ResNet (default resnet50)
 Output: Modelo entrenado + métricas en MLflow
 """
 import os
@@ -132,6 +132,7 @@ def train_unet_model(**context):
         "LEARNING_RATE": UNetConfig.LEARNING_RATE,
         "IMG_SIZE": UNetConfig.IMG_SIZE,
         "PATIENCE": UNetConfig.PATIENCE,
+        "SEED": UNetConfig.SEED,
     }
 
     payload = {
