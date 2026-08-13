@@ -69,7 +69,7 @@ jobs:
           else
             echo "DOCKER_USERNAME=${{ secrets.DOCKERHUB_USERNAME }}" >> $GITHUB_ENV
             echo "DOCKER_TOKEN=${{ secrets.DOCKERHUB_TOKEN }}" >> $GITHUB_ENV
-            echo "RUNPOD_ENDPOINT_ID=${{ vars.RUNPOD_ENDPOINT_ID_SANTIAGO }}" >> $GITHUB_ENV
+            echo "RUNPOD_ENDPOINT_ID=${{ vars.RUNPOD_ENDPOINT_ID }}" >> $GITHUB_ENV
             echo "RUNPOD_API_KEY=${{ secrets.RUNPOD_API_KEY }}" >> $GITHUB_ENV
             echo "✓ Usando credentials de Santiago"
           fi
