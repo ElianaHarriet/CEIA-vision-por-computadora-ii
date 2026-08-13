@@ -2,13 +2,14 @@
 import os
 import numpy as np
 import torch
+
+# Disable NNPACK IMMEDIATELY after torch import to avoid errors on older CPUs/VMs
+torch.backends.nnpack.enabled = False
+
 from PIL import Image
 from tqdm import tqdm
 import albumentations as A
 from albumentations.pytorch import ToTensorV2
-
-# Disable NNPACK to avoid "Unsupported hardware" errors on older CPUs/VMs
-torch.backends.nnpack.enabled = False
 
 
 class YOLOPredictor:

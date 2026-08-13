@@ -1,11 +1,12 @@
 """Model loader for evaluation."""
 import mlflow
 import torch
+
+# Disable NNPACK IMMEDIATELY after torch import to avoid errors on older CPUs/VMs
+torch.backends.nnpack.enabled = False
+
 from pathlib import Path
 from ultralytics import YOLO
-
-# Disable NNPACK to avoid "Unsupported hardware" errors on older CPUs/VMs
-torch.backends.nnpack.enabled = False
 
 
 class ModelLoader:
