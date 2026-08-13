@@ -61,7 +61,7 @@ class RunPodClient:
             var_name = f"RUNPOD_API_KEY_{profile.upper()}"
             try:
                 self._api_key = Variable.get(var_name)
-            except KeyError:
+            except Exception:
                 # Fallback to generic RUNPOD_API_KEY
                 self._api_key = Variable.get("RUNPOD_API_KEY")
         return self._api_key
