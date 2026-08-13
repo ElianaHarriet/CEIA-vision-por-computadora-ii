@@ -3,4 +3,4 @@
 # tanto localmente (Airflow) como en GitHub Actions (CI/CD)
 #
 # Valores permitidos: luis | santiago
-RUNPOD_PROFILE=luis
+RUNPOD_PROFILE=santiago
