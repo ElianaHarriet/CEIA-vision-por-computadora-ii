@@ -7,6 +7,9 @@ from tqdm import tqdm
 import albumentations as A
 from albumentations.pytorch import ToTensorV2
 
+# Disable NNPACK to avoid "Unsupported hardware" errors on older CPUs/VMs
+torch.backends.nnpack.enabled = False
+
 
 class YOLOPredictor:
     """Predictor for YOLO models."""

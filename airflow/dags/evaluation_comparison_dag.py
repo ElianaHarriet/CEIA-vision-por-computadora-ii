@@ -491,8 +491,8 @@ log_mlflow = PythonOperator(
 )
 
 # Define dependencies
-check_models >> load_test
-load_test >> [predict_instance, predict_semantic]
+# Run predictions sequentially to avoid CPU/RAM contention on resource-limited machines
+check_models >> load_test >> predict_instance >> predict_semantic
 predict_instance >> flatten_masks
 [flatten_masks, predict_semantic] >> calc_metrics
 calc_metrics >> validate_hyp >> gen_viz >> gen_report >> log_mlflow
