@@ -26,7 +26,8 @@ class WeightedDiceLoss(torch.nn.Module):
     def forward(self, logits, masks):
         """Compute weighted Dice loss."""
         probs = F.softmax(logits, dim=1)
-        w = self.class_weights.view(1, -1, 1, 1)
+        # Ensure weights are on the same device as logits
+        w = self.class_weights.to(logits.device).view(1, -1, 1, 1)
         one_hot = torch.zeros_like(probs).scatter_(1, masks.unsqueeze(1), 1.0)
         intersection = (probs * one_hot * w).sum(dim=(2, 3)).sum(dim=0)
         cardinality = ((probs + one_hot) * w).sum(dim=(2, 3)).sum(dim=0)
