@@ -4,6 +4,9 @@ import torch
 from pathlib import Path
 from ultralytics import YOLO
 
+# Disable NNPACK to avoid "Unsupported hardware" errors on older CPUs/VMs
+torch.backends.nnpack.enabled = False
+
 
 class ModelLoader:
     """Loader for MLflow models."""
