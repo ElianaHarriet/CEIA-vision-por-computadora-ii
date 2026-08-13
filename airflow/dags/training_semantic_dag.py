@@ -206,11 +206,11 @@ setup_env = PythonOperator(
     dag=dag,
 )
 
-prepare_loaders = PythonOperator(
-    task_id='create_dataloaders',
-    python_callable=create_dataloaders,
-    dag=dag,
-)
+# prepare_loaders = PythonOperator(
+#     task_id='create_dataloaders',
+#     python_callable=create_dataloaders,
+#     dag=dag,
+# )
 
 train_model = PythonOperator(
     task_id='train_unet_model',
@@ -235,5 +235,6 @@ register_model = PythonOperator(
 
 # Define dependencies
 # Validación local desactivada: ya se validó en RunPod con GPU
-deps = [check_data, upload_dataset, setup_env, prepare_loaders, train_model, register_model]
-deps[0] >> deps[1] >> deps[2] >> deps[3] >> deps[4] >> deps[5]
+# create_dataloaders comentado: requiere albumentations (solo en RunPod)
+deps = [check_data, upload_dataset, setup_env, train_model, register_model]
+deps[0] >> deps[1] >> deps[2] >> deps[3] >> deps[4]
