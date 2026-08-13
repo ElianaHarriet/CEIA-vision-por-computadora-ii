@@ -235,11 +235,11 @@ train_model = PythonOperator(
     retries=0,
 )
 
-# register_model = PythonOperator(
-#     task_id='register_model_in_registry',
-#     python_callable=register_model_in_registry,
-#     dag=dag,
-# )
+register_model = PythonOperator(
+    task_id='register_model_in_registry',
+    python_callable=register_model_in_registry,
+    dag=dag,
+)
 
 # validate_model = PythonOperator(
 #     task_id='validate_trained_model',
