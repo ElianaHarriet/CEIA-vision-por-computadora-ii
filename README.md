@@ -70,8 +70,8 @@ Dataset original en formato de segmentación semántica, que se convierte autom�
 | 3 | Severe Damage | Daños severos/graves |
 
 **Estadísticas:**
-- Total: 2,324 imágenes
-- Train: 1,974 imágenes
+- Total: 2,320 imágenes
+- Train: 1,970 imágenes
 - Valid: 231 imágenes
 - Test: 119 imágenes
 

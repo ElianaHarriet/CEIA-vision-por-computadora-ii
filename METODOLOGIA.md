@@ -40,8 +40,8 @@ Comparar el desempeño de dos arquitecturas de segmentación (instance vs semant
   - Severe Damage - Daños severos/graves
 
 **Estadísticas:**
-- Total: 2,324 imágenes
-- Train: 1,974 imágenes
+- Total: 2,320 imágenes
+- Train: 1,970 imágenes
 - Valid: 231 imágenes
 - Test: 119 imágenes
 
@@ -96,7 +96,7 @@ car-damages-ready/semantic/
 ## 🤖 Modelos a Entrenar
 
 ### Modelo 1: Instance Segmentation
-- **Arquitectura:** YOLOv8-seg (YOLOv8n-seg, YOLOv8s-seg, o YOLOv8x-seg)
+- **Arquitectura:** YOLOv8-seg (variante usada en la corrida final: **yolov8x-seg.pt**, confirmado en los parámetros del run de MLflow)
 - **Datos de entrenamiento:** `car-damages-ready/instance/`
 - **Formato de entrada:** Imágenes + archivos .txt con polígonos en formato YOLOv8
 - **Formato de salida:** Máscaras individuales por cada instancia detectada
@@ -238,56 +238,68 @@ Se proponen dos estrategias de comparación:
 
 ### Paso 6: Comparación Final
 
-**Resultados (re-evaluación aplicando todas las correcciones):**
+**Resultados (corrida final v2 del DAG `evaluation_and_comparison`, 2026-08-14):**
 
-Métricas binarias de daño (máscara daño vs no-daño, referencia de la Opción B):
+Métricas binarias de daño (daño vs no-daño, "No Damage" tratada como fondo):
+
+| Métrica | YOLOv8-seg (Instance) | U-Net (Semantic) | Diferencia | Δ% |
+|---------|----------------------|------------------|------------|-----|
+| IoU Global (binary damage) | 0.6061 | 0.6200 | -0.0139 | -2.24% |
+| Precision binaria | 0.6280 | 0.6532 | -0.0252 | -3.86% |
+| Recall binario | 0.7305 | 0.6429 | +0.0876 | +13.63% |
+| F1-Score binario | 0.6309 | 0.6139 | +0.0170 | +2.76% |
+| Pixel Accuracy (global) | 0.8394 | 0.8851 | -0.0458 | -5.17% |
+
+**Multiclase (macro sobre 5 clases) y error de área:**
 
 | Métrica | YOLOv8-seg (Instance) | U-Net (Semantic) | Diferencia |
 |---------|----------------------|------------------|------------|
-| IoU Global (binary damage) | 0.6342 | 0.6200 | +0.0142 |
-| Precision binaria | 0.6332 | 0.6532 | -0.0200 |
-| Recall binario | 0.7215 | 0.6429 | +0.0787 |
-| F1-Score binario | 0.6339 | 0.6139 | +0.0200 |
-| Pixel Accuracy | 0.8693 | 0.8851 | -0.0158 |
-| Error Área relativo | 62.77% | 45.01% | +17.75 pp |
+| Precisión (macro, 5 clases) | 0.3127 | 0.3327 | -0.0200 |
+| Recall (macro, 5 clases) | 0.3149 | 0.3233 | -0.0085 |
+| F1 (macro, 5 clases) | 0.3015 | 0.3150 | -0.0135 |
+| Error de área absoluto (px) | 31,592.9 | 18,116.7 | +13,476.3 |
+| **Error de área relativo** | **0.8704** | **0.4501** | **+0.4202** |
 
-> La imagen sin daño (unión == 0) se puntúa con IoU = 1.0 en vez de 0.0,
-> eliminando el artefacto que deflactaba las medias (0.5323 → 0.6342 en
-> instance; 0.5191 → 0.6200 en semantic).
+> No mezclar las dos tablas anteriores: la primera reporta precisión/recall
+> **binarios** (daño vs no-daño); la segunda, **macro multiclase** sobre las
+> 5 clases (Background + 4 clases de daño).
 
-**IoU per-clase (micro-promedio sobre el test set, Opción A):**
+**IoU per-clase (micro-promedio sobre el test set):**
 
 | Clase | YOLOv8-seg (Instance) | U-Net (Semantic) | Diferencia |
 |-------|----------------------|------------------|------------|
-| Background | 0.8757 | 0.8870 | -0.0113 |
-| Minor Damage (Dent) | 0.3981 | 0.3952 | +0.0029 |
-| Minor Damage (Scratch) | 0.3921 | 0.5276 | -0.1355 |
-| No Damage | 0.5954 | 0.5473 | +0.0481 |
-| Severe Damage | 0.4753 | 0.5300 | -0.0547 |
+| Background | 0.8362 | 0.8870 | -0.0508 |
+| Minor Damage (Dent) | 0.4126 | 0.3952 | +0.0174 |
+| Minor Damage (Scratch) | 0.5307 | 0.5276 | +0.0032 |
+| No Damage | 0.4363 | 0.5473 | -0.1110 |
+| Severe Damage | 0.4100 | 0.5300 | -0.1200 |
 
-> La diferencia más marcada está en **Scratch**, donde U-Net aventaja a
-> YOLOv8-seg por +0.14. El modelo instance solo supera levemente en Dent
-> y No Damage.
+> Con el ground truth de la v2, U-Net **ya no colapsa "No Damage"** (el
+> IoU 0.0000 de la corrida anterior desapareció): domina las clases
+> minoritarias — No Damage (0.5473 vs 0.4363) y Severe Damage (0.5300 vs
+> 0.4100) — mientras el modelo instance conserva una ventaja marginal en
+> las dos clases de daño leve.
 
 **Análisis estadístico (paired bootstrap, 1000 resamples, seed=2026):**
-- **Subset común**: 108 imágenes evaluadas por ambos modelos (instance
-  108, semantic 119). Las 11 imágenes excluidas de instance son daños
-  que YOLO **no detectó** (falsos negativos de detección) y que la
-  máscara GT sí contiene; no son imágenes sin daño.
-- Paired t-test (sobre el subset común): p = 0.6564 → **no significativo**
-- IoU Instance (common): 95% CI [0.5818, 0.6857]
-- IoU Semantic (common): 95% CI [0.5920, 0.6963]
-- Diferencia: 95% CI [-0.0521, 0.0334] → **contiene 0**, el gap no es
-  estadísticamente significativo
+- **Subset común**: 89 imágenes evaluadas por ambos modelos (instance
+  evaluado sobre 89 imágenes, semantic sobre 119). En 30 imágenes YOLO no
+  produjo ninguna máscara, por lo que el análisis pareado principal se
+  restringe a las 89 imágenes comunes.
+- IoU medio pareado — instance: 0.6061 · semantic: 0.6605 · diferencia -0.0544 (-8.23%)
+- Paired t-test (sobre el subset común): p = 0.0289 → **significativo**
+- IoU Instance (common): 95% CI [0.5450, 0.6641]
+- IoU Semantic (common): 95% CI [0.6033, 0.7102]
+- Diferencia: 95% CI [-0.1024, -0.0093] → **excluye al 0**, el gap es
+  estadísticamente significativo a favor del modelo semantic
 
-> El test es pareado: se comparan los IoU por imagen de las 108 imágenes
+> El test es pareado: se comparan los IoU por imagen de las 89 imágenes
 > evaluadas por ambos modelos, eliminando el sesgo de selección de
-> poblaciones de distinto tamaño (108 vs 119).
+> poblaciones de distinto tamaño (89 vs 119).
 
-**Veredicto preliminar:** ambos modelos son estadísticamente
-indistinguibles en IoU de daño. La ventaja práctica de U-Net aparece en
-el error de área relativo (45% vs 63%), donde su estimación es
-sustancialmente más precisa.
+**Veredicto:** el modelo semantic segmenta el daño con un IoU pareado
+significativamente mayor (p = 0.0289) y su ventaja práctica se confirma
+en el error de área relativo (0.4501 vs 0.8704), donde su estimación
+comete casi la mitad del error del modelo instance.
 
 ## 💡 Hipótesis a Validar
 
@@ -315,14 +327,17 @@ sustancialmente más precisa.
 - Si Error_área_instance < Error_área_semantic → Hipótesis validada
 - Análisis cualitativo de contornos
 
-**Resultado de la validación (Final):**
-- IoU de daño: instance  0.6342 > semantic 0.6200, pero p = 0.6564 (paired
-  sobre 108 imágenes comunes) y el CI de la diferencia [-0.0521, 0.0334]
-  contiene 0 → **no significativo**.
-- Error de área relativo: semantic 45.01% < instance 62.77%.
-- El modelo semantic genera **máscaras multiclase** con contornos más
-  confiables que el flattening de instancias, no solo en área sino también
-  en las clases Scratch y Severe.
+**Resultado de la validación (Final, corrida v2):**
+- IoU de daño: semantic 0.6605 vs instance 0.6061 (subset pareado);
+  p = 0.0289 (paired sobre 89 imágenes comunes) y el CI de la diferencia
+  [-0.1024, -0.0093] excluye al 0 → **significativo a favor del semantic**.
+- Error de área relativo: semantic 0.4501 < instance 0.8704 — casi la
+  mitad, la diferencia más clara de todo el experimento.
+- El modelo semantic domina además las clases minoritarias (No Damage
+  0.5473 vs 0.4363; Severe 0.5300 vs 0.4100). Los dos paradigmas fallan
+  de forma distinta: instance favorece recall (0.7305 vs 0.6429),
+  semantic favorece precisión (0.6532 vs 0.6280) y cobertura (predice en
+  las 119 imágenes de test; instance no emitió máscara en 30).
 
 **Hipótesis principal: ❌ REFUTADA.** U-Net (semantic segmentation)
 resulta comparable o superior a YOLOv8-seg para estimaciones de área de
@@ -479,12 +494,12 @@ docker compose --profile all up
 ```
 car_damage_detection/car-damages/car-damages-ready/
 ├── instance/
-│   ├── train/ (1,974 imágenes)
+│   ├── train/ (1,970 imágenes)
 │   ├── valid/ (231 imágenes)
 │   ├── test/ (119 imágenes)
 │   └── data.yaml
 └── semantic/
-    ├── train/ (1,974 imágenes)
+    ├── train/ (1,970 imágenes)
     ├── valid/ (231 imágenes)
     └── test/ (119 imágenes)
 ```
@@ -665,5 +680,5 @@ generate_comparison_report(results)
 
 ---
 
-**Última actualización:** 2026-07-19  
-**Versión:** 2.0 - Metodología definitiva con Dataset A único
+**Última actualización:** 2026-08-14
+**Versión:** 3.0 - Métricas actualizadas con la corrida **v2** del DAG `evaluation_and_comparison` (`Resultados/comparison-instane-vrs-semantic_v2/`, 89 imágenes pareadas, seed 2026): diferencia de IoU ahora significativa a favor del modelo semantic (p=0.0289) y sin colapso de "No Damage"
