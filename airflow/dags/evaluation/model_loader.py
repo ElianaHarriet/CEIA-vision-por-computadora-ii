@@ -24,8 +24,14 @@ class ModelLoader:
         try:
             versions = client.get_latest_versions(model_name, [stage])
             if not versions:
-                msg = f"No model in stage {stage}"
-                raise ValueError(msg)
+                msg = f"No model in stage {stage}; falling back to latest version"
+                print(f"⚠ {msg}")
+                versions = client.search_model_versions(f"name='{model_name}'")
+                if not versions:
+                    raise ValueError(f"No model registered: {model_name}")
+                version = max(versions, key=lambda v: int(v.version))
+                print(f"⚠ Using fallback {model_name} v{version.version} (stage {version.current_stage})")
+                return version
             version = versions[0]
             print(f"✓ Found {model_name} v{version.version}")
             return version
