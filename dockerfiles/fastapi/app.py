@@ -7,14 +7,26 @@ Endpoints:
 - POST /predict/compare: Compare both models on the same image
 - GET /models/info: Get information about loaded models
 - GET /health: Health check endpoint
-
-TODO: Implement model loading and prediction logic.
 """
 
 import os
-from fastapi import FastAPI, File, UploadFile, HTTPException
-from fastapi.responses import JSONResponse
+import base64
+import io
+import tempfile
+
+import torch
+
+# Disable NNPACK IMMEDIATELY after torch import to avoid errors on older CPUs/VMs
+torch.backends.nnpack.enabled = False
+
+import mlflow
 import numpy as np
+from fastapi import FastAPI, File, UploadFile, HTTPException
+from PIL import Image
+
+from evaluation.model_loader import YOLOModelLoader, UNetModelLoader
+from evaluation.predictor import YOLOPredictor, UNetPredictor
+from evaluation.mask_flattener import MaskFlattener
 
 app = FastAPI(
     title="Car Damage Segmentation API",
@@ -22,44 +34,119 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# Global variables for models (loaded on startup)
-instance_model = None
-semantic_model = None
+# Index 0 = background, copied from EvaluationConfig.CLASS_NAMES
+# (airflow/dags/evaluation/config.py) so this service stays decoupled from
+# evaluation/config.py's Airflow-only path assumptions.
+CLASS_NAMES = ["Background", "Minor Damage (Dent)", "Minor Damage (Scratch)", "No Damage", "Severe Damage"]
 
 # Environment variables
 MLFLOW_TRACKING_URI = os.getenv("MLFLOW_TRACKING_URI", "http://mlflow:5000")
 MODEL_NAME_INSTANCE = os.getenv("MODEL_NAME_INSTANCE", "car-damage-instance-segmentation")
 MODEL_NAME_SEMANTIC = os.getenv("MODEL_NAME_SEMANTIC", "car-damage-semantic-segmentation")
 MODEL_STAGE = os.getenv("MODEL_STAGE", "Production")
+MODEL_VERSION_INSTANCE = os.getenv("MODEL_VERSION_INSTANCE", "latest")
+MODEL_VERSION_SEMANTIC = os.getenv("MODEL_VERSION_SEMANTIC", "latest")
+
+# Populated by load_models() on startup
+instance_predictor = None
+semantic_predictor = None
+mask_flattener = None
+instance_model_info = None
+semantic_model_info = None
+
+
+def _resolve_version(loader, model_name: str, version_override: str):
+    """Return the ModelVersion to load: a pinned version, or the stage's latest."""
+    if version_override != "latest":
+        return mlflow.MlflowClient().get_model_version(model_name, version_override)
+    return loader.check_model_availability(model_name, MODEL_STAGE)
+
+
+def _load_instance_model():
+    """Load the YOLO instance-segmentation model, tolerating failure."""
+    global instance_predictor, instance_model_info
+    try:
+        loader = YOLOModelLoader(MLFLOW_TRACKING_URI)
+        version = _resolve_version(loader, MODEL_NAME_INSTANCE, MODEL_VERSION_INSTANCE)
+        model_uri = f"runs:/{version.run_id}/model/best.pt"
+        local_path = mlflow.artifacts.download_artifacts(model_uri)
+        from ultralytics import YOLO
+        model = YOLO(local_path)
+        instance_predictor = YOLOPredictor(model, conf=float(os.getenv("YOLO_CONF", "0.4")))
+        instance_model_info = {"version": version.version, "run_id": version.run_id, "stage": version.current_stage}
+        print(f"✓ Instance model loaded: v{version.version}")
+    except Exception as exc:
+        print(f"✗ Failed to load instance model: {exc}")
+
+
+def _load_semantic_model():
+    """Load the U-Net semantic-segmentation model, tolerating failure."""
+    global semantic_predictor, semantic_model_info
+    try:
+        loader = UNetModelLoader(MLFLOW_TRACKING_URI)
+        version = _resolve_version(loader, MODEL_NAME_SEMANTIC, MODEL_VERSION_SEMANTIC)
+        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        model_uri = f"models:/{MODEL_NAME_SEMANTIC}/{version.version}"
+        model = mlflow.pytorch.load_model(model_uri, map_location=device)
+        model = model.to(device)
+        model.eval()
+        img_size = (int(os.getenv("UNET_IMG_SIZE", "640")),) * 2
+        semantic_predictor = UNetPredictor(model, device, img_size=img_size)
+        semantic_model_info = {"version": version.version, "run_id": version.run_id, "stage": version.current_stage}
+        print(f"✓ Semantic model loaded: v{version.version}")
+    except Exception as exc:
+        print(f"✗ Failed to load semantic model: {exc}")
 
 
 @app.on_event("startup")
 async def load_models():
-    """
-    Load models from MLflow on startup.
-    
-    TODO: Implement model loading from MLflow Model Registry.
-    
-    Example:
-    ```python
-    import mlflow
-    
+    """Load both models from the MLflow Model Registry on startup."""
+    global mask_flattener
     mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
-    
-    # Load instance model
-    instance_model_uri = f"models:/{MODEL_NAME_INSTANCE}/{MODEL_STAGE}"
-    global instance_model
-    instance_model = mlflow.pyfunc.load_model(instance_model_uri)
-    
-    # Load semantic model
-    semantic_model_uri = f"models:/{MODEL_NAME_SEMANTIC}/{MODEL_STAGE}"
-    global semantic_model
-    semantic_model = mlflow.pytorch.load_model(semantic_model_uri)
-    ```
-    """
-    print("TODO: Implementar carga de modelos desde MLflow")
-    print(f"Instance Model: models:/{MODEL_NAME_INSTANCE}/{MODEL_STAGE}")
-    print(f"Semantic Model: models:/{MODEL_NAME_SEMANTIC}/{MODEL_STAGE}")
+    _load_instance_model()
+    _load_semantic_model()
+    mask_flattener = MaskFlattener(strategy='class_aware', class_map={0: 1, 1: 2, 2: 3, 3: 4})
+
+
+def _validate_upload(file: UploadFile):
+    """Reject non-image uploads — this endpoint is exposed directly to the internet."""
+    if file.content_type is None or not file.content_type.startswith("image/"):
+        raise HTTPException(status_code=400, detail="File must be an image")
+
+
+def _save_upload_to_tmp(contents: bytes, filename: str) -> str:
+    """Persist uploaded bytes to a temp file — predictors take a path, not bytes."""
+    suffix = os.path.splitext(filename or "")[1] or ".jpg"
+    with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
+        tmp.write(contents)
+        return tmp.name
+
+
+def _encode_mask_png(mask: np.ndarray) -> str:
+    """Encode a class-id mask as a base64 PNG for JSON transport."""
+    buffer = io.BytesIO()
+    Image.fromarray(mask.astype(np.uint8)).save(buffer, format="PNG")
+    return base64.b64encode(buffer.getvalue()).decode("ascii")
+
+
+def _class_distribution(mask: np.ndarray) -> dict:
+    """Pixel count and percentage per class present in a mask."""
+    total = mask.size
+    unique, counts = np.unique(mask, return_counts=True)
+    return {
+        CLASS_NAMES[int(u)]: {"pixels": int(c), "percentage": round(100 * float(c) / total, 2)}
+        for u, c in zip(unique, counts)
+    }
+
+
+def _iou_per_class(mask_a: np.ndarray, mask_b: np.ndarray, classes=(1, 2, 3, 4)) -> dict:
+    """Per-class IoU between two class-id masks — model agreement, not ground-truth accuracy."""
+    result = {}
+    for c in classes:
+        a, b = (mask_a == c), (mask_b == c)
+        union = (a | b).sum()
+        result[CLASS_NAMES[c]] = 1.0 if union == 0 else float((a & b).sum()) / float(union)
+    return result
 
 
 @app.get("/")
@@ -81,249 +168,113 @@ def read_root():
 
 @app.get("/health")
 async def health_check():
-    """
-    Health check endpoint.
-    
-    Verifies:
-    - API is running
-    - Models are loaded
-    """
-    models_loaded = instance_model is not None and semantic_model is not None
-    
+    """Health check endpoint. Verifies API is running and models are loaded."""
+    models_loaded = instance_predictor is not None and semantic_predictor is not None
     return {
         "status": "healthy" if models_loaded else "degraded",
-        "instance_model_loaded": instance_model is not None,
-        "semantic_model_loaded": semantic_model is not None,
+        "instance_model_loaded": instance_predictor is not None,
+        "semantic_model_loaded": semantic_predictor is not None,
         "message": "All models loaded" if models_loaded else "Models not loaded yet"
     }
 
 
 @app.get("/models/info")
 async def models_info():
-    """
-    Get information about loaded models.
-    
-    TODO: Query MLflow for model versions and metrics.
-    
-    Example:
-    ```python
-    import mlflow
-    
-    client = mlflow.MlflowClient(tracking_uri=MLFLOW_TRACKING_URI)
-    
-    # Get instance model info
-    instance_versions = client.search_model_versions(f"name='{MODEL_NAME_INSTANCE}'")
-    instance_prod = [v for v in instance_versions if v.current_stage == MODEL_STAGE]
-    
-    # Get semantic model info
-    semantic_versions = client.search_model_versions(f"name='{MODEL_NAME_SEMANTIC}'")
-    semantic_prod = [v for v in semantic_versions if v.current_stage == MODEL_STAGE]
-    ```
-    """
+    """Get version/run_id/stage of the models actually loaded."""
     return {
         "instance_model": {
             "name": MODEL_NAME_INSTANCE,
             "stage": MODEL_STAGE,
-            "loaded": instance_model is not None,
-            "status": "TODO: Query MLflow for version and metrics"
+            "loaded": instance_predictor is not None,
+            **(instance_model_info or {})
         },
         "semantic_model": {
             "name": MODEL_NAME_SEMANTIC,
             "stage": MODEL_STAGE,
-            "loaded": semantic_model is not None,
-            "status": "TODO: Query MLflow for version and metrics"
+            "loaded": semantic_predictor is not None,
+            **(semantic_model_info or {})
         }
     }
 
 
 @app.post("/predict/instance")
 async def predict_instance(file: UploadFile = File(...)):
-    """
-    Predict using instance segmentation model (YOLOv8-seg).
-    
-    Args:
-        file: Image file (jpg, png)
-    
-    Returns:
-        JSON with instance predictions:
-        - num_detections: Number of damage instances detected
-        - boxes: Bounding boxes for each instance
-        - masks: Segmentation masks for each instance
-        - classes: Class IDs for each instance
-        - confidences: Confidence scores
-    
-    TODO: Implement prediction logic.
-    
-    Example:
-    ```python
-    # Read and process image
-    contents = await file.read()
-    image = process_image(contents)
-    
-    # Predict
-    results = instance_model.predict(image)
-    
-    # Extract predictions
-    boxes = results[0].boxes.xyxy.cpu().numpy()
-    masks = results[0].masks.data.cpu().numpy()
-    classes = results[0].boxes.cls.cpu().numpy()
-    confidences = results[0].boxes.conf.cpu().numpy()
-    
-    return {
-        "num_detections": len(boxes),
-        "boxes": boxes.tolist(),
-        "masks": masks.tolist(),
-        "classes": classes.tolist(),
-        "confidences": confidences.tolist()
-    }
-    ```
-    """
-    if instance_model is None:
+    """Predict using instance segmentation model (YOLOv8-seg)."""
+    if instance_predictor is None:
         raise HTTPException(status_code=503, detail="Instance model not loaded")
-    
-    return {
-        "status": "TODO",
-        "message": "Implementar predicción con modelo instance",
-        "filename": file.filename
-    }
+    _validate_upload(file)
+    contents = await file.read()
+    tmp_path = _save_upload_to_tmp(contents, file.filename)
+    try:
+        pred = instance_predictor._predict_single(tmp_path)
+        classes = [int(c) for c in pred["classes"]]
+        return {
+            "num_detections": len(classes),
+            "boxes": [b.tolist() for b in pred["boxes"]],
+            "classes": classes,
+            "class_names": [CLASS_NAMES[c + 1] for c in classes],
+            "confidences": [float(c) for c in pred["confidences"]]
+        }
+    finally:
+        os.unlink(tmp_path)
 
 
 @app.post("/predict/semantic")
 async def predict_semantic(file: UploadFile = File(...)):
-    """
-    Predict using semantic segmentation model (U-Net/DeepLab).
-    
-    Args:
-        file: Image file (jpg, png)
-    
-    Returns:
-        JSON with semantic prediction:
-        - mask: Segmentation mask (HxW array with class IDs)
-        - class_distribution: Percentage of each class
-        - total_damaged_area: Total damaged pixels
-    
-    TODO: Implement prediction logic.
-    
-    Example:
-    ```python
-    import torch
-    from PIL import Image
-    import io
-    
-    # Read and process image
-    contents = await file.read()
-    image = Image.open(io.BytesIO(contents))
-    image_tensor = preprocess_image(image)
-    
-    # Predict
-    with torch.no_grad():
-        output = semantic_model(image_tensor)
-        mask = torch.argmax(output, dim=1).cpu().numpy()
-    
-    # Calculate class distribution
-    unique, counts = np.unique(mask, return_counts=True)
-    distribution = {f"class_{int(u)}": int(c) for u, c in zip(unique, counts)}
-    
-    return {
-        "mask": mask.tolist(),
-        "class_distribution": distribution,
-        "total_damaged_area": int((mask > 0).sum())
-    }
-    ```
-    """
-    if semantic_model is None:
+    """Predict using semantic segmentation model (U-Net)."""
+    if semantic_predictor is None:
         raise HTTPException(status_code=503, detail="Semantic model not loaded")
-    
-    return {
-        "status": "TODO",
-        "message": "Implementar predicción con modelo semantic",
-        "filename": file.filename
-    }
+    _validate_upload(file)
+    contents = await file.read()
+    tmp_path = _save_upload_to_tmp(contents, file.filename)
+    try:
+        mask = semantic_predictor._predict_single(tmp_path)
+        # Damaged classes are 1 (Dent), 2 (Scratch), 4 (Severe) — 0 is background, 3 is "No Damage".
+        damaged = int(np.isin(mask, [1, 2, 4]).sum())
+        return {
+            "mask_shape": list(mask.shape),
+            "class_distribution": _class_distribution(mask),
+            "total_damaged_area_pixels": damaged,
+            "total_damaged_area_pct": round(100 * damaged / mask.size, 2),
+            "mask_png_base64": _encode_mask_png(mask)
+        }
+    finally:
+        os.unlink(tmp_path)
 
 
 @app.post("/predict/compare")
 async def compare_models(file: UploadFile = File(...)):
-    """
-    Compare both models on the same image.
-    
-    This is the main endpoint for the project - it demonstrates the comparison
-    between instance and semantic segmentation approaches.
-    
-    Args:
-        file: Image file (jpg, png)
-    
-    Returns:
-        JSON with comparison results:
-        - instance_segmentation: Results from instance model
-        - semantic_segmentation: Results from semantic model
-        - comparison: Comparative metrics (IoU, area difference, etc.)
-        - conclusion: Which model performed better
-    
-    TODO: Implement full comparison pipeline.
-    
-    Example implementation:
-    ```python
-    # 1. Process image
-    contents = await file.read()
-    image = process_image(contents)
-    
-    # 2. Predict with instance model
-    instance_results = instance_model.predict(image)
-    instance_masks = instance_results[0].masks.data.cpu().numpy()
-    
-    # 3. Flatten instance masks (merge all instances into one mask)
-    flattened_instance = flatten_masks(instance_masks)
-    
-    # 4. Predict with semantic model
-    with torch.no_grad():
-        semantic_output = semantic_model(image)
-        semantic_mask = torch.argmax(semantic_output, dim=1).cpu().numpy()
-    
-    # 5. Calculate areas
-    area_instance = int((flattened_instance > 0).sum())
-    area_semantic = int((semantic_mask > 0).sum())
-    
-    # 6. Calculate IoU (if ground truth available, otherwise skip)
-    # iou_instance = calculate_iou(flattened_instance, ground_truth)
-    # iou_semantic = calculate_iou(semantic_mask, ground_truth)
-    
-    # 7. Compare
-    area_diff = abs(area_instance - area_semantic)
-    area_diff_pct = (area_diff / max(area_instance, area_semantic)) * 100
-    
-    return {
-        "instance_segmentation": {
-            "num_detections": len(instance_masks),
-            "total_area_pixels": area_instance,
-            "detections_by_class": count_detections_by_class(instance_results)
-        },
-        "semantic_segmentation": {
-            "total_area_pixels": area_semantic,
-            "class_distribution": calculate_class_distribution(semantic_mask)
-        },
-        "comparison": {
-            "area_difference_pixels": area_diff,
-            "area_difference_percentage": round(area_diff_pct, 2),
-            "larger_area_model": "instance" if area_instance > area_semantic else "semantic",
-            "conclusion": generate_conclusion(area_instance, area_semantic)
-        }
-    }
-    ```
-    """
-    if instance_model is None or semantic_model is None:
+    """Compare both models on the same image (main endpoint for this project)."""
+    if instance_predictor is None or semantic_predictor is None:
         raise HTTPException(status_code=503, detail="Models not loaded")
-    
-    return {
-        "status": "TODO",
-        "message": "Implementar comparación completa de ambos modelos",
-        "filename": file.filename,
-        "steps_to_implement": [
-            "1. Procesar imagen de entrada",
-            "2. Predicción con modelo instance (YOLOv8)",
-            "3. Aplanar máscaras de instance",
-            "4. Predicción con modelo semantic (U-Net)",
-            "5. Calcular métricas (área, IoU si hay ground truth)",
-            "6. Comparar resultados",
-            "7. Generar conclusión"
-        ]
-    }
+    _validate_upload(file)
+    contents = await file.read()
+    tmp_path = _save_upload_to_tmp(contents, file.filename)
+    try:
+        instance_pred = instance_predictor._predict_single(tmp_path)
+        semantic_mask = semantic_predictor._predict_single(tmp_path)
+
+        flat_instance = mask_flattener.flatten_predictions({"upload": instance_pred})["upload"]
+        if flat_instance is None:
+            flat_instance = np.zeros_like(semantic_mask)
+
+        iou = _iou_per_class(flat_instance, semantic_mask)
+        # Damaged classes are 1 (Dent), 2 (Scratch), 4 (Severe) — 0 is background, 3 is "No Damage".
+        return {
+            "instance_segmentation": {
+                "num_detections": len(instance_pred["classes"]),
+                "total_damaged_area_pixels": int(np.isin(flat_instance, [1, 2, 4]).sum()),
+                "class_distribution": _class_distribution(flat_instance)
+            },
+            "semantic_segmentation": {
+                "total_damaged_area_pixels": int(np.isin(semantic_mask, [1, 2, 4]).sum()),
+                "class_distribution": _class_distribution(semantic_mask)
+            },
+            "comparison": {
+                "iou_per_class": iou,
+                "mean_iou": round(sum(iou.values()) / len(iou), 4),
+                "note": "IoU measures agreement between the two models, not accuracy against ground truth (none exists for a user-uploaded photo)."
+            }
+        }
+    finally:
+        os.unlink(tmp_path)

@@ -17,6 +17,7 @@ Este documento explica cómo configurar y mantener la infraestructura compartida
 | MLflow UI | 5001 | http://24.144.120.67:5001 |
 | MinIO API | 9000 | http://24.144.120.67:9000 |
 | MinIO Console | 9001 | http://24.144.120.67:9001 |
+| FastAPI (serving) | 8800 | http://24.144.120.67:8800 (docs en `/docs`) |
 | PostgreSQL | 5432 | (interno, no expuesto) |
 
 ## 🚀 Setup Inicial (Ya hecho, solo para referencia)
@@ -64,8 +65,19 @@ PG_PORT=5432
 
 # MLflow
 MLFLOW_PORT=5001
+
+# FastAPI (serving)
+FASTAPI_PORT=8800
+MLFLOW_EXPERIMENT_NAME=car-damage-segmentation
+MODEL_NAME_INSTANCE=car-damage-instance-segmentation
+MODEL_NAME_SEMANTIC=car-damage-semantic-segmentation
+MODEL_STAGE=Production
+MODEL_VERSION_INSTANCE=latest
+MODEL_VERSION_SEMANTIC=latest
 EOF
 ```
+
+No seteamos acá `MLFLOW_TRACKING_URI`/`MLFLOW_S3_ENDPOINT_URL`: al quedar sin definir, el default `${VAR:-http://mlflow:5000}` de `docker-compose.yaml` resuelve al contenedor `mlflow`/`s3` sibling por red interna de Docker.
 
 ### 5. Configurar firewall (opcional)
 
@@ -91,6 +103,7 @@ Esto levanta:
 - **s3**: MinIO (almacenamiento de artefactos)
 - **mlflow**: Servidor MLflow
 - **create_buckets**: Inicialización de buckets (corre una sola vez y se detiene)
+- **fastapi**: Serving de los modelos entrenados (instance + semantic + compare)
 
 ### 7. Verificar que todo está corriendo
 
@@ -326,6 +339,8 @@ DigitalOcean (24.144.120.67)
 - [ ] Buckets `mlflow` y `data` existen en MinIO
 - [ ] PostgreSQL acepta conexiones
 - [ ] Todos los contenedores en estado "running" (excepto create_buckets)
+- [ ] `/health` de FastAPI responde `{"status":"healthy", ...}` en http://24.144.120.67:8800/health
+- [ ] `/docs` de FastAPI accesible en http://24.144.120.67:8800/docs
 - [ ] Espacio en disco > 20% disponible
 - [ ] Logs sin errores críticos
 
