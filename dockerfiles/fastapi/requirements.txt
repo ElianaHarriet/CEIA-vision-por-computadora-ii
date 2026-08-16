@@ -4,14 +4,13 @@ python-multipart>=0.0.9
 
 # ML and Model Serving
 mlflow>=2.10.0
-# torch>=2.0.0  # TODO: Uncomment when implementing
-# torchvision>=0.15.0  # TODO: Uncomment when implementing
-# ultralytics>=8.0.0  # TODO: Uncomment for YOLOv8
-# segmentation-models-pytorch>=0.3.0  # TODO: Uncomment for U-Net
+ultralytics>=8.0.0
+segmentation-models-pytorch>=0.3.0
+albumentations>=1.4.0
 
 # Image Processing
-# pillow>=10.0.0  # TODO: Uncomment when implementing
-# opencv-python>=4.8.0  # TODO: Uncomment when implementing
+Pillow~=10.0
+opencv-python-headless>=4.8.0
 numpy>=1.24.0
 
 # AWS/S3 (for MLflow artifacts)
