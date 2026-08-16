@@ -48,14 +48,14 @@ pip install -r requirements.txt
 python app.py
 ```
 
-Abre el navegador en: http://localhost:7860 (o el `DEMO_PORT` configurado).
-Para que apunte al FastAPI de DigitalOcean, setear `FASTAPI_HOST=24.144.120.67`
+Disponible en: http://localhost:7860 (o el `DEMO_PORT` configurado).
+Para apuntar al FastAPI de DigitalOcean, alcanza con `FASTAPI_HOST=24.144.120.67`
 en el `.env` de la raíz.
 
 ## Características
 
-- 📤 Upload de imágenes
-- 🔍 Análisis con YOLO (instance segmentation)
-- 🎨 Análisis con U-Net (semantic segmentation)
-- 📊 Comparación de resultados con métricas IoU
-- 🖼️ Visualización de máscara semántica
+- 📤 Carga de imágenes desde el navegador
+- 🟠 Overlay de daños de YOLO (instancias) sobre la foto original
+- 🎨 Overlay de daños de U-Net (semántica) sobre la foto original
+- 📊 Tarjetas de métricas: detecciones, área dañada por modelo e IoU promedio
+- 📈 Distribución por clase de cada modelo y acuerdo (IoU) por clase
