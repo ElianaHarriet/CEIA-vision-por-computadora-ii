@@ -10,7 +10,7 @@ la comparación es objetiva (precisión), no solo acuerdo entre modelos.
 
 ## Ejemplos (`samples/`)
 
-`samples/` contiene 10 imágenes del split de test con sus máscaras de ground
+`samples/` contiene 25 imágenes del split de test con sus máscaras de ground
 truth (`sample_XX.jpg` + `sample_XX_gt.png`). Se curaron a partir de
 `data/semantic.tar.gz` (bucket `data` de MinIO) eligiendo casos con variedad de
 daño (dent, scratch, severe) y en orientación natural. Las máscaras son PNG de
