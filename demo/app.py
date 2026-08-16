@@ -145,7 +145,30 @@ CUSTOM_CSS = """
                 radial-gradient(1000px 500px at 110% 10%, #312e81 0%, transparent 50%),
                 linear-gradient(160deg, #0b1120 0%, #0f172a 60%, #111827 100%) !important;
     color: #e2e8f0 !important;
+    /* Sobrescribir las variables del tema para que TODOS los bloques
+       (imágenes, labels, inputs) hereden el fondo oscuro y no queden blancos. */
+    --block-background-fill: rgba(30, 41, 59, 0.55) !important;
+    --block-label-background-fill: rgba(15, 23, 42, 0.85) !important;
+    --block-label-text-color: #cbd5e1 !important;
+    --block-title-text-color: #e2e8f0 !important;
+    --input-background-fill: rgba(15, 23, 42, 0.6) !important;
+    --panel-background-fill: rgba(30, 41, 59, 0.55) !important;
+    --border-color-primary: rgba(148, 163, 184, 0.16) !important;
+    --body-text-color: #e2e8f0 !important;
+    --body-text-color-subdued: #94a3b8 !important;
+    --neutral-950: #0b1120 !important;
 }
+/* Zona de imagen (marco/letterbox) y estados vacíos: gris muy suave en vez de blanco. */
+.gradio-container [data-testid="image"],
+.gradio-container .image-frame,
+.gradio-container .image-container,
+.gradio-container .empty,
+.gradio-container .wrap.svelte-1cl284s {
+    background: rgba(15, 23, 42, 0.55) !important;
+}
+/* Barras de gr.Label: texto claro y fondo acorde. */
+.gradio-container .output-class,
+.gradio-container .label-wrap { color: #e2e8f0 !important; }
 #hero {
     text-align: center;
     padding: 26px 18px 6px;
