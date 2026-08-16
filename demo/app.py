@@ -209,6 +209,16 @@ CUSTOM_CSS = """
 .gradio-container .image-container, .gradio-container .empty {
     background: rgba(15, 23, 42, 0.55) !important;
 }
+/* Resaltado fuerte del thumbnail seleccionado en la galería. */
+#sample-gallery .thumbnail-item.selected,
+#sample-gallery button.selected,
+#sample-gallery .selected {
+    outline: 3px solid #22d3ee !important;
+    box-shadow: 0 0 0 3px rgba(34, 211, 238, 0.55), 0 0 20px rgba(34, 211, 238, 0.6) !important;
+    border-radius: 10px !important;
+    transform: scale(1.02);
+    transition: all 0.12s ease-in-out;
+}
 #hero { text-align: center; padding: 26px 18px 6px; }
 #hero h1 {
     font-size: 2rem; font-weight: 800; letter-spacing: -0.02em; margin: 0;
@@ -258,8 +268,11 @@ with gr.Blocks(title="Car Damage Detection", theme=gr.themes.Soft(
         with gr.Column(scale=5, elem_classes="panel"):
             gallery = gr.Gallery(
                 value=GALLERY, label="Ejemplos del set de test", columns=5,
-                height=260, allow_preview=False, object_fit="cover",
+                height=200, allow_preview=False, object_fit="cover",
+                elem_id="sample-gallery",
             )
+            preview_out = gr.Image(label="Ejemplo seleccionado", type="filepath",
+                                   height=240, interactive=False)
             analyze_btn = gr.Button("🔍 Analizar y comparar con ground truth",
                                     variant="primary", size="lg", elem_id="analyze-btn")
             gr.HTML(_legend_html())
@@ -283,9 +296,14 @@ with gr.Blocks(title="Car Damage Detection", theme=gr.themes.Soft(
     )
 
     def _on_select(evt: gr.SelectData):
-        return evt.index
+        idx = evt.index
+        preview = SAMPLES[idx][0] if 0 <= idx < len(SAMPLES) else None
+        label = SAMPLES[idx][2] if 0 <= idx < len(SAMPLES) else ""
+        info = (f'<div class="status status-ok">Seleccionado: <b>{label}</b> · '
+                'listo para analizar</div>') if preview else ""
+        return idx, preview, info
 
-    gallery.select(fn=_on_select, inputs=None, outputs=selected_state)
+    gallery.select(fn=_on_select, inputs=None, outputs=[selected_state, preview_out, status_out])
 
     analyze_btn.click(
         fn=analyze,
