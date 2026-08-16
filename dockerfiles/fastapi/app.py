@@ -39,6 +39,16 @@ app = FastAPI(
 # evaluation/config.py's Airflow-only path assumptions.
 CLASS_NAMES = ["Background", "Minor Damage (Dent)", "Minor Damage (Scratch)", "No Damage", "Severe Damage"]
 
+# Color per class id (RGB), used to build the visual overlays returned by
+# /predict/compare. Shared with the demo's legend so colors stay consistent.
+CLASS_COLORS = {
+    0: (17, 24, 39),     # Background  - dark slate (never tinted on overlays)
+    1: (245, 158, 11),   # Minor Damage (Dent)    - amber
+    2: (250, 204, 21),   # Minor Damage (Scratch) - yellow
+    3: (34, 197, 94),    # No Damage              - green
+    4: (239, 68, 68),    # Severe Damage          - red
+}
+
 # Environment variables
 MLFLOW_TRACKING_URI = os.getenv("MLFLOW_TRACKING_URI", "http://mlflow:5000")
 MODEL_NAME_INSTANCE = os.getenv("MODEL_NAME_INSTANCE", "car-damage-instance-segmentation")
@@ -126,6 +136,36 @@ def _encode_mask_png(mask: np.ndarray) -> str:
     """Encode a class-id mask as a base64 PNG for JSON transport."""
     buffer = io.BytesIO()
     Image.fromarray(mask.astype(np.uint8)).save(buffer, format="PNG")
+    return base64.b64encode(buffer.getvalue()).decode("ascii")
+
+
+def _encode_overlay_png(image_path: str, mask: np.ndarray, alpha: float = 0.55) -> str:
+    """Blend the class-id mask (colorized) over the original photo as a base64 PNG.
+
+    Only damaged/relevant classes are tinted; background pixels keep the original
+    photo so the result reads as "damage highlighted on the real car".
+    """
+    base = Image.open(image_path).convert("RGB")
+    base_arr = np.array(base)
+    h, w = mask.shape[:2]
+    if base_arr.shape[:2] != (h, w):
+        base = base.resize((w, h))
+        base_arr = np.array(base)
+
+    color = np.zeros_like(base_arr)
+    for cid, rgb in CLASS_COLORS.items():
+        if cid == 0:
+            continue  # leave background untouched
+        color[mask == cid] = rgb
+
+    overlay = base_arr.copy()
+    tinted = mask != 0
+    overlay[tinted] = (
+        base_arr[tinted] * (1 - alpha) + color[tinted] * alpha
+    ).astype(np.uint8)
+
+    buffer = io.BytesIO()
+    Image.fromarray(overlay).save(buffer, format="PNG")
     return base64.b64encode(buffer.getvalue()).decode("ascii")
 
 
@@ -259,16 +299,21 @@ async def compare_models(file: UploadFile = File(...)):
             flat_instance = np.zeros_like(semantic_mask)
 
         iou = _iou_per_class(flat_instance, semantic_mask)
+        # Overlays reuse the masks already computed above (no extra inference).
+        instance_overlay = _encode_overlay_png(tmp_path, flat_instance)
+        semantic_overlay = _encode_overlay_png(tmp_path, semantic_mask)
         # Damaged classes are 1 (Dent), 2 (Scratch), 4 (Severe) — 0 is background, 3 is "No Damage".
         return {
             "instance_segmentation": {
                 "num_detections": len(instance_pred["classes"]),
                 "total_damaged_area_pixels": int(np.isin(flat_instance, [1, 2, 4]).sum()),
-                "class_distribution": _class_distribution(flat_instance)
+                "class_distribution": _class_distribution(flat_instance),
+                "overlay_png_base64": instance_overlay
             },
             "semantic_segmentation": {
                 "total_damaged_area_pixels": int(np.isin(semantic_mask, [1, 2, 4]).sum()),
-                "class_distribution": _class_distribution(semantic_mask)
+                "class_distribution": _class_distribution(semantic_mask),
+                "overlay_png_base64": semantic_overlay
             },
             "comparison": {
                 "iou_per_class": iou,
