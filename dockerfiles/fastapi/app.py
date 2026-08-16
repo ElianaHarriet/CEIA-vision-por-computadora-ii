@@ -308,12 +308,15 @@ async def compare_models(file: UploadFile = File(...)):
                 "num_detections": len(instance_pred["classes"]),
                 "total_damaged_area_pixels": int(np.isin(flat_instance, [1, 2, 4]).sum()),
                 "class_distribution": _class_distribution(flat_instance),
-                "overlay_png_base64": instance_overlay
+                "overlay_png_base64": instance_overlay,
+                # Máscara cruda de class-ids (0-4) para comparar contra ground truth.
+                "mask_png_base64": _encode_mask_png(flat_instance)
             },
             "semantic_segmentation": {
                 "total_damaged_area_pixels": int(np.isin(semantic_mask, [1, 2, 4]).sum()),
                 "class_distribution": _class_distribution(semantic_mask),
-                "overlay_png_base64": semantic_overlay
+                "overlay_png_base64": semantic_overlay,
+                "mask_png_base64": _encode_mask_png(semantic_mask)
             },
             "comparison": {
                 "iou_per_class": iou,

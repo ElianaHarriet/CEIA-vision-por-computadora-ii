@@ -15,5 +15,6 @@ RUN pip install --upgrade pip \
     && pip install --no-cache-dir -r requirements.txt
 
 COPY demo/app.py ./app.py
+COPY demo/samples ./samples
 
 EXPOSE 7860

@@ -3,6 +3,19 @@
 Interfaz gráfica para comparar los modelos YOLO vs U-Net en detección de daños de autos.
 Consume el endpoint `/predict/compare` del servicio FastAPI.
 
+El usuario elige una imagen del **set de test** (que tiene anotación humana /
+*ground truth*), y la demo muestra el overlay de daños de cada modelo junto al
+ground truth, calculando el **IoU real de cada modelo contra la verdad** — así
+la comparación es objetiva (precisión), no solo acuerdo entre modelos.
+
+## Ejemplos (`samples/`)
+
+`samples/` contiene 10 imágenes del split de test con sus máscaras de ground
+truth (`sample_XX.jpg` + `sample_XX_gt.png`). Se curaron a partir de
+`data/semantic.tar.gz` (bucket `data` de MinIO) eligiendo casos con variedad de
+daño (dent, scratch, severe) y en orientación natural. Las máscaras son PNG de
+class-ids (0-4), la misma convención que usa la evaluación del proyecto.
+
 ## Configuración
 
 La demo se configura desde el `.env` de la raíz del repo (mismo patrón que el
@@ -54,8 +67,9 @@ en el `.env` de la raíz.
 
 ## Características
 
-- 📤 Carga de imágenes desde el navegador
-- 🟠 Overlay de daños de YOLO (instancias) sobre la foto original
-- 🎨 Overlay de daños de U-Net (semántica) sobre la foto original
-- 📊 Tarjetas de métricas: detecciones, área dañada por modelo e IoU promedio
-- 📈 Distribución por clase de cada modelo y acuerdo (IoU) por clase
+- 🖼️ Galería de ejemplos del set de test (con ground truth)
+- 🟠 Overlay de daños de YOLO (instancias) sobre la imagen
+- 🎨 Overlay de daños de U-Net (semántica) sobre la imagen
+- ✅ Overlay del ground truth (anotación humana) para referencia visual
+- 📊 mIoU de cada modelo vs ground truth y cuál se acerca más
+- 📈 IoU por clase de cada modelo contra la verdad
