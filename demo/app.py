@@ -73,7 +73,7 @@ def predict_and_compare(image, progress=gr.Progress()):
     """Envía la imagen a /predict/compare y arma las salidas visuales."""
     if image is None:
         return _empty_outputs(
-            '<div class="status status-warn">Subí una foto de un auto para empezar.</div>'
+            '<div class="status status-warn">Todavía no se cargó ninguna foto para analizar.</div>'
         )
 
     try:
@@ -230,7 +230,8 @@ with gr.Blocks(title="Car Damage Detection", theme=gr.themes.Soft(
         '<div id="hero">'
         '<h1>🚗 Car Damage Detection</h1>'
         '<p>Comparación de daños con dos enfoques: <b>YOLOv8-seg</b> (instancias) '
-        'vs <b>U-Net</b> (semántica). Subí una foto y mirá los daños resaltados.</p>'
+        'vs <b>U-Net</b> (semántica). Al cargar una foto, cada modelo resalta las '
+        'zonas donde detecta daño.</p>'
         '</div>'
     )
 
@@ -241,7 +242,7 @@ with gr.Blocks(title="Car Damage Detection", theme=gr.themes.Soft(
             gr.HTML(_legend_html())
         with gr.Column(scale=6, elem_classes="panel"):
             status_out = gr.HTML(
-                '<div class="status status-warn">Subí una foto de un auto para empezar.</div>'
+                '<div class="status status-warn">Todavía no se cargó ninguna foto para analizar.</div>'
             )
             metrics_out = gr.HTML()
 
