@@ -1,5 +1,15 @@
 # 📐 Metodología del Proyecto: Comparación Instance vs Semantic Segmentation
 
+> ⚠️ **SUPERSEDED / HISTÓRICO:** Esta nota documenta la metodología y los
+> resultados de una iteración de evaluación **anterior (semantic v1, run
+> local)**. Los números que reporta (108 imágenes comunes, p=0.6564,
+> IoU instance 0.6342, etc.) **ya no son los vigentes** y contradicen la
+> evaluación oficial. Ver resultados actualizados en
+> `.informe/datos/INFO_BRUTA.md` (run compartido `89ce3d2c`, semantic v2):
+> 89 imágenes comunes, p=0.0289, error de área relativo 0.4501 (U-Net) vs
+> 0.8704 (instance). El informe académico (`main.tex`) cita los números
+> oficiales, **no** los de este archivo.
+
 ## 🔑 Concepto Clave del Proyecto
 
 **Pregunta Central:**  

@@ -122,3 +122,27 @@ class TestReportGenerator:
         assert (tmp_path / "comparison_data.json").exists()
         content = (tmp_path / "comparison_report.md").read_text()
         assert "Conclusion" in content
+
+    def _build_for_ci(self, tmp_path, ci_difference):
+        report = ComparisonReport(str(tmp_path),
+                                  class_names=["Bg", "Dent", "Scratch",
+                                               "No", "Severe"])
+        data = _data()
+        data["hypothesis"] = {
+            **_hypothesis(),
+            "ci_difference": ci_difference,
+            "mean_iou_instance": 0.5,
+            "mean_iou_semantic": 0.6,
+        }
+        return report._build_report(data)
+
+    def test_conclusion_significant_when_ci_excludes_zero(self, tmp_path):
+        """CI of the difference excluding 0 must NOT be labeled as not
+        significant (regression: it was hardcoded as such)."""
+        lines = self._build_for_ci(tmp_path, (-0.10, -0.01))
+        assert "statistically significant" in lines
+        assert "not statistically significant" not in lines
+
+    def test_conclusion_not_significant_when_ci_contains_zero(self, tmp_path):
+        lines = self._build_for_ci(tmp_path, (-0.15, 0.17))
+        assert "not statistically significant" in lines

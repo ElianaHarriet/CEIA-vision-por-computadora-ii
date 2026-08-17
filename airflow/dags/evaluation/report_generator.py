@@ -228,9 +228,14 @@ class ComparisonReport:
                    else "excludes 0 → the gap is significant.")
             )
         if diff is not None:
+            significant = ci_diff is not None and not (ci_diff[0] <= 0 <= ci_diff[1])
+            sign_txt = (
+                "statistically significant" if significant
+                else "not statistically significant"
+            )
             iou_line = (
                 f"- **IoU (binary damage, paired)**: difference {diff:+.4f} "
-                "over the common subset (not statistically significant)."
+                f"over the common subset ({sign_txt})."
             )
         else:
             iou_line = (
