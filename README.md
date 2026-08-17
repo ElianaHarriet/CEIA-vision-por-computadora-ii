@@ -15,6 +15,14 @@
 
 Repositorio para el curso de Visión por Computadora II de la Carrera de Especialización en Inteligencia Artificial (CEIA) - FIUBA.
 
+### 🎤 Diapositivas
+
+[Link a la presentación](https://docs.google.com/presentation/d/1vvjbfcnS2vrYN3lYFib10xBCpfYQcFK2vXha03uN0ME/edit?usp=sharing)
+
+### 📄 Trabajo Final
+
+[Informe (IEEE Conference Document)](IEEE%20Conference%20Document.pdf)
+
 ### ⚙️ Servicios
 - [Apache Airflow](https://airflow.apache.org/)
 - [MLflow](https://mlflow.org/)
